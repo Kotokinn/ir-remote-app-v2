@@ -1,0 +1,24 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { House } from "lucide-react";
+
+export default function SplashPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => { router.replace("/onboarding"); }, 1200);
+    return () => { clearTimeout(timer); };
+  }, [router]);
+
+  return (
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-gradient text-primary-foreground">
+      <span className="flex size-20 items-center justify-center rounded-3xl bg-white/15">
+        <House className="size-10" strokeWidth={1.6} />
+      </span>
+      <h1 className="text-xl font-bold tracking-tight">Smart Home</h1>
+      <p className="text-sm text-white/80">Control every room, one tap away</p>
+    </main>
+  );
+}
