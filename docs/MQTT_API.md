@@ -81,7 +81,8 @@ Publish (retained) lúc kết nối MQTT và mỗi khi thuộc tính đổi.
   "pendingFirmwareVersion": "",
   "ledMode": 0,
   "ledState": false,
-  "blinkingInterval": 1000
+  "blinkingInterval": 1000,
+  "sleepModeActive": false
 }
 ```
 
@@ -111,7 +112,8 @@ Response chung:
   "message": "…",
   "ledMode": 0,
   "ledState": false,
-  "blinkingInterval": 1000
+  "blinkingInterval": 1000,
+  "sleepModeActive": false
 }
 ```
 
@@ -216,6 +218,34 @@ Protocol hợp lệ theo hãng (thứ tự gợi ý để app thử lần lượ
 | Kelon | `KELON` |
 | York | `YORK` |
 
+### setSleepMode
+
+Bật/tắt sleep mode cho AC. Có nhiệt độ dễ ngủ mặc định theo từng đối tượng (tham khảo khuyến nghị phổ biến), app có thể ghi đè bằng `targetTemp`. Bật `setSleepMode` mà chưa gửi `sendAc` lần nào trong phiên, hoặc RTC chưa sẵn sàng, đều bị từ chối.
+
+```json
+{ "method": "setSleepMode", "params": { "enabled": true, "subject": "adult", "wakeTime": "06:00", "targetTemp": 24 } }
+```
+
+- `enabled`: `true` để bật (bắt buộc `subject` + `wakeTime`), `false` để tắt ngay (không gửi lệnh IR nào khi tắt, AC giữ nguyên trạng thái hiện tại).
+- `subject`: `"child"` | `"adult"` | `"elder"` — quyết định nhiệt độ dễ ngủ mặc định nếu không có `targetTemp`.
+- `wakeTime`: `"HH:MM"`, giờ kết thúc sleep mode.
+- `targetTemp` *(tuỳ chọn)*: nhiệt độ mong muốn khi ngủ (°C, 16-30). Không có thì dùng mặc định theo `subject`: `child`=27, `adult`=25, `elder`=27.
+
+Vòng đời (tính từ lúc `enabled:true`):
+
+1. **Giữ nguyên (30 phút đầu)**: không gửi lệnh gì, AC vẫn chạy đúng cấu hình lúc bấm sleep (baseline = `sendAc` gần nhất).
+2. **Giai đoạn ngủ**: set thẳng `targetTemp` (mặc định hoặc app tự chọn), sau đó **dùng chính cảm biến nhiệt của hub** (`temp` trong telemetry, mục 1) để bù trừ — vì setpoint AC không đảm bảo phòng thực sự đạt đúng mức đó:
+   - Phòng đo được nóng hơn `targetTemp` quá 0.5°C → giảm setpoint 1°C (lạnh thêm).
+   - Phòng đo được lạnh hơn `targetTemp` quá 0.5°C → tăng setpoint 1°C (bớt lạnh, tránh quá lạnh lúc ngủ).
+   - Trong sai số 0.5°C → không đổi gì.
+   - Độ phân giải bù trừ phụ thuộc chu kỳ đọc cảm biến của hub (`ROOM_TEMP_READ_INTERVAL_MS`, hiện 15 phút/lần) — không bù nhanh hơn tốc độ đo thật.
+3. **Tới `wakeTime`**: dừng điều chỉnh, AC giữ nguyên setpoint cuối cùng (không có lệnh trả về cấu hình cũ, không tắt AC). Sleep mode tự tắt (`sleepModeActive:false`).
+
+Ghi chú:
+- Bất kỳ lệnh `sendAc` nào (người dùng chỉnh tay) trong lúc đang sleep sẽ **tự huỷ sleep mode** ngay, tránh việc thiết bị ghi đè lại lệnh vừa gửi.
+- Trạng thái sleep mode **không lưu NVS** — khởi động lại thiết bị là mất phiên đang chạy (giống trạng thái buzzer đang kêu).
+- Trạng thái hiện tại xem ở field `sleepModeActive` trong response lệnh và trong `attributes` (mục 2).
+
 ### setRgbColor
 
 Đổi màu dải LED RGB (WS2812B) ngay lập tức.
@@ -233,6 +263,26 @@ Protocol hợp lệ theo hãng (thứ tự gợi ý để app thử lần lượ
 ```
 
 `mode` (0-11): `0`=OFF, `1`=STATIC, `2`=ROTATING, `3`=BREATHING, `4`=WAVE, `5`=RAINBOW, `6`=STROBE, `7`=SPARKLE, `8`=CONFETTI, `9`=POLICE, `10`=COLOR_WIPE, `11`=FIRE.
+
+### setRgbBrightness
+
+Đổi độ sáng dải LED RGB.
+
+```json
+{ "method": "setRgbBrightness", "params": { "value": 70 } }
+```
+
+`value`: 0-100 (%), map sang FastLED 0-255 nội bộ.
+
+### setRgbSpeed
+
+Đổi tốc độ hiệu ứng LED (chạy theo nhịp - STROBE/WAVE/SPARKLE/CONFETTI/POLICE/COLOR_WIPE). STATIC không dùng tới.
+
+```json
+{ "method": "setRgbSpeed", "params": { "value": 50 } }
+```
+
+`value`: 10-500 (ms/bước), càng nhỏ càng nhanh.
 
 ### setAlarm
 
@@ -306,7 +356,7 @@ Xoá toàn bộ schedule (cả bản đã lưu trong NVS). Không cần `params`
 
 ### Lưu cấu hình (NVS)
 
-Các cấu hình sau được lưu vào flash và **giữ nguyên sau khi khởi động lại**: `ledMode`, `ledState`, `blinkingInterval`, màu và mode RGB (`setRgbColor`/`setRgbMode`), `volume`/`crescendo` của buzzer (`setAlarm`), và toàn bộ schedule (mục 6). Trạng thái đang kêu của buzzer không được lưu: khởi động lại là tắt còi. Lưu ngay khi đổi qua command hoặc `config/set`; nạp lại lúc boot. Schedule `repeat=false` đã chạy xong tự bị xoá khỏi NVS; schedule `repeat=true` tồn tại tới khi gọi `clearSchedules`. WiFi/timezone (mục 8) và token OTA vốn đã được lưu riêng.
+Các cấu hình sau được lưu vào flash và **giữ nguyên sau khi khởi động lại**: `ledMode`, `ledState`, `blinkingInterval`, màu, mode, độ sáng và tốc độ RGB (`setRgbColor`/`setRgbMode`/`setRgbBrightness`/`setRgbSpeed`), `volume`/`crescendo` của buzzer (`setAlarm`), và toàn bộ schedule (mục 6). Trạng thái đang kêu của buzzer không được lưu: khởi động lại là tắt còi. Lưu ngay khi đổi qua command hoặc `config/set`; nạp lại lúc boot. Schedule `repeat=false` đã chạy xong tự bị xoá khỏi NVS; schedule `repeat=true` tồn tại tới khi gọi `clearSchedules`. WiFi/timezone (mục 8) và token OTA vốn đã được lưu riêng.
 
 ### IR nhận thô
 

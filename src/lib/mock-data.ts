@@ -51,8 +51,15 @@ export const CATEGORIES: Record<CategoryId, Category> = {
 
 export type DeviceKind = "toggle" | "light" | "ac" | "remote" | "alarm" | "rgb";
 export type AcMode = "cool" | "heat" | "fan" | "auto" | "dry";
-export type FanSpeed = "low" | "medium" | "high" | "auto";
-export type RgbEffect = "solid" | "blink" | "breathe" | "flow";
+export type FanSpeed = "auto" | "low" | "min" | "medium" | "high" | "max";
+/**
+ * Vertical swing (the louver's up/down sweep) — not horizontal swing, which the firmware/doc don't
+ * expose. docs/MQTT_API.md's sendAc `swing` is a richer 0-7 enum; the app exposes these 4 (no "off").
+ */
+export type AcSwing = "auto" | "highest" | "middle" | "lowest";
+/** docs/MQTT_API.md setSleepMode: who is sleeping, decides the default sleep temperature. */
+export type AcSleepSubject = "child" | "adult" | "elder";
+export type RgbEffect = "solid" | "blink" | "breathe" | "flow" | "chase";
 
 export interface Device {
   id: string;
@@ -71,7 +78,14 @@ export interface Device {
   acMode?: AcMode;
   targetTemp?: number;
   fanSpeed?: FanSpeed;
-  swing?: boolean;
+  swing?: AcSwing;
+  /** docs/MQTT_API.md setSleepMode. Not saved by the hub (resets on reboot) — same caveat as the
+   * rest of this AC state: what's stored here is the app's last action, not a live read-back. */
+  sleepEnabled?: boolean;
+  sleepSubject?: AcSleepSubject;
+  sleepWakeTime?: string;
+  /** Overrides the per-subject default sleep temperature; unset = firmware picks it from subject. */
+  sleepTargetTemp?: number;
   /** UI brand label picked in ac-setup.tsx, mapped to a real IR protocol name in lib/device/commands.ts. */
   brand?: string;
   // remote (kind: "remote")
@@ -80,6 +94,8 @@ export interface Device {
   alarmTime?: string;
   alarmDays?: string[];
   // rgb (kind: "rgb")
+  /** Hex ("#rrggbb") — the real setRgbColor value, picked from a swatch or the free-color picker. */
+  color?: string;
   effect?: RgbEffect;
   effectSpeed?: number;
 }
@@ -158,6 +174,7 @@ export interface SceneAction {
       | "targetTemp"
       | "fanSpeed"
       | "swing"
+      | "color"
       | "effect"
       | "effectSpeed"
     >

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Lightbulb } from "lucide-react";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { useRoomsStore } from "@/lib/store/rooms-store";
-import { getCategory, type Device, type DeviceKind, type SceneAction } from "@/lib/mock-data";
+import { getCategory, SHADE_COLORS, type Device, type DeviceKind, type SceneAction } from "@/lib/mock-data";
 import { LightControlPanel, type LightState } from "@/components/devices/light-control-panel";
 import { AcControlPanel, type AcState } from "@/components/devices/ac-control-panel";
 import { RgbControlPanel, type RgbState } from "@/components/devices/rgb-control-panel";
@@ -30,13 +30,13 @@ function defaultPatch(device: Device): Patch {
         acMode: device.acMode ?? "cool",
         targetTemp: device.targetTemp ?? 24,
         fanSpeed: device.fanSpeed ?? "auto",
-        swing: device.swing ?? false,
+        swing: device.swing ?? "auto",
       };
     case "rgb":
       return {
         isOn: true,
         intensity: device.intensity ?? 70,
-        colorIndex: device.colorIndex ?? 0,
+        color: device.color ?? SHADE_COLORS[0],
         effect: device.effect ?? "solid",
         effectSpeed: device.effectSpeed ?? 3,
       };
@@ -91,7 +91,7 @@ function DeviceEditor({
         name={device.name}
         isOn={patch.isOn ?? true}
         intensity={patch.intensity}
-        colorIndex={patch.colorIndex}
+        color={patch.color}
         effect={patch.effect}
         effectSpeed={patch.effectSpeed}
         onChange={(state: RgbState) => {

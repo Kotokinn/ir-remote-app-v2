@@ -154,6 +154,10 @@
     0% { filter: hue-rotate(0deg); }
     100% { filter: hue-rotate(360deg); }
   }
+  @keyframes rgb-chase {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
   .animate-rgb-blink {
     animation: rgb-blink 1s steps(1) infinite;
   }
@@ -162,5 +166,8 @@
   }
   .animate-rgb-flow {
     animation: rgb-flow 3s linear infinite;
+  }
+  .animate-rgb-chase {
+    animation: rgb-chase 1.8s linear infinite;
   }
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import type { Device } from "@/lib/mock-data";
+import { SHADE_COLORS, type Device } from "@/lib/mock-data";
 import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { ProductPicker } from "@/components/home/add-device/product-picker";
@@ -128,7 +128,7 @@ export function AddDeviceFlow({
             categoryId: "lighting",
             kind: "rgb",
             intensity: 70,
-            colorIndex: 0,
+            color: SHADE_COLORS[0],
             effect: "solid",
             effectSpeed: 3,
           })}
@@ -148,7 +148,7 @@ export function AddDeviceFlow({
             acMode: "cool",
             targetTemp: 24,
             fanSpeed: "auto",
-            swing: false,
+            swing: "auto",
           })}
         />
       )}

@@ -15,7 +15,7 @@ type SendState = "idle" | "sending" | "sent" | "failed";
 
 // What we send while probing a protocol variant: switch the unit on, cool, 24 degrees —
 // something the user can see or hear the AC react to.
-const TEST_STATE: AcState = { isOn: true, acMode: "cool", targetTemp: 24, fanSpeed: "auto", swing: false };
+const TEST_STATE: AcState = { isOn: true, acMode: "cool", targetTemp: 24, fanSpeed: "auto", swing: "auto" };
 
 function newDeviceId() {
   return `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -124,7 +124,7 @@ export function AcSetup({
       hubId,
     };
     if (resultKind === "ac") {
-      onDone({ ...base, kind: "ac", acMode: "cool", targetTemp: 24, fanSpeed: "auto", swing: false, brand: protocol });
+      onDone({ ...base, kind: "ac", acMode: "cool", targetTemp: 24, fanSpeed: "auto", swing: "auto", brand: protocol });
     } else {
       onDone({ ...base, kind: "remote", buttons: learnedButtons });
     }

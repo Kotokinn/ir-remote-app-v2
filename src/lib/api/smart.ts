@@ -8,7 +8,9 @@ export interface ScenePatch {
   acMode?: string;
   targetTemp?: number;
   fanSpeed?: string;
-  swing?: boolean;
+  swing?: string;
+  /** rgb kind: hex color ("#rrggbb"). */
+  color?: string;
   effect?: string;
   effectSpeed?: number;
 }

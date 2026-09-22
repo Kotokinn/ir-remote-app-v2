@@ -13,7 +13,7 @@
 //    deleteSchedule removes exactly that one.
 import { buildRgbCommands, buildSendAcCommand } from "@/lib/device/commands";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
-import type { Device, Scene, SceneAction, Schedule } from "@/lib/mock-data";
+import { SHADE_COLORS, type Device, type Scene, type SceneAction, type Schedule } from "@/lib/mock-data";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { getPhysicalDevice, useHubsStore } from "@/lib/store/hubs-store";
 
@@ -40,7 +40,7 @@ function firmwareId(schedule: Schedule): string {
 }
 
 // The app's weekday index is 0=Monday..6=Sunday (schedule page); firmware uses 0=Sunday..6=Saturday.
-function toFirmwareDay(appDay: number): number {
+export function toFirmwareDay(appDay: number): number {
   return (appDay + 1) % 7;
 }
 
@@ -55,7 +55,7 @@ function actionsFor(device: Device, patch: SceneAction["patch"], revert: boolean
       acMode: state.acMode ?? "cool",
       targetTemp: state.targetTemp ?? 24,
       fanSpeed: state.fanSpeed ?? "auto",
-      swing: state.swing ?? false,
+      swing: state.swing ?? "auto",
     });
     return [{ method: command.method, params: { ...command.params } }];
   }
@@ -64,7 +64,7 @@ function actionsFor(device: Device, patch: SceneAction["patch"], revert: boolean
     return buildRgbCommands({
       isOn,
       intensity: state.intensity ?? 70,
-      colorIndex: state.colorIndex ?? 0,
+      color: state.color ?? SHADE_COLORS[0],
       effect: state.effect ?? "solid",
       effectSpeed: state.effectSpeed ?? 50,
     });

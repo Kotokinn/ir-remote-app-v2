@@ -9,15 +9,16 @@ import { useDevicesStore } from "@/lib/store/devices-store";
 import { useHubsStore, getPhysicalDevice } from "@/lib/store/hubs-store";
 import { cn } from "@/lib/utils";
 import { LightControlPanel } from "@/components/devices/light-control-panel";
-import { AcControlPanel, type AcState } from "@/components/devices/ac-control-panel";
+import { AcControlPanel, type AcState, type SleepState } from "@/components/devices/ac-control-panel";
 import { RemoteControlPanel } from "@/components/devices/remote-control-panel";
-import { AlarmControlPanel } from "@/components/devices/alarm-control-panel";
+import { AlarmControlPanel, type AlarmState } from "@/components/devices/alarm-control-panel";
 import { RgbControlPanel, type RgbState } from "@/components/devices/rgb-control-panel";
 import { ToggleDeviceRow } from "@/components/devices/toggle-device-row";
 import { ConfirmDialog } from "@/components/home/confirm-dialog";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
 import { HubStatusDot, HubTemperatureReadout } from "@/components/home/hub-live-status";
-import { buildRgbCommands, buildSendAcCommand } from "@/lib/device/commands";
+import { buildRgbCommands, buildSendAcCommand, buildSetSleepModeCommand } from "@/lib/device/commands";
+import { removeAlarmFromHub, syncAlarmToHub } from "@/lib/device/alarm-sync";
 
 export function CategoryClient({
   roomId,
@@ -37,6 +38,7 @@ export function CategoryClient({
   );
   const [selectedId, setSelectedId] = useState(devices[0]?.id);
   const [deleteTarget, setDeleteTarget] = useState<Device | undefined>(undefined);
+  const [alarmSyncError, setAlarmSyncError] = useState<string | null>(null);
   const selectedDevice = devices.find((d) => d.id === selectedId) ?? devices[0];
   const allToggle = devices.every((d) => d.kind === "toggle");
 
@@ -68,6 +70,35 @@ export function CategoryClient({
     sendDeviceCommand(deviceId, "sendAc", buildSendAcCommand(device.brand, state).params).catch((error: unknown) => {
       console.error("[ac] sendDeviceCommand failed", error);
     });
+  }
+
+  function handleSleepChange(device: Device, state: SleepState) {
+    updateDevice(device.id, {
+      sleepEnabled: state.enabled,
+      sleepSubject: state.subject,
+      sleepWakeTime: state.wakeTime,
+      sleepTargetTemp: state.targetTemp,
+    });
+    const deviceId = realDeviceIdFor(device);
+    if (!deviceId) return;
+    sendDeviceCommand(deviceId, "setSleepMode", buildSetSleepModeCommand(state).params).catch(
+      (error: unknown) => {
+        console.error("[ac] setSleepMode failed", error);
+      }
+    );
+  }
+
+  function handleAlarmChange(device: Device, state: AlarmState) {
+    setAlarmSyncError(null);
+    const updated = { ...device, ...state };
+    updateDevice(device.id, state);
+    syncAlarmToHub(updated)
+      .then((result) => {
+        if (!result.ok) setAlarmSyncError(result.message);
+      })
+      .catch((error: unknown) => {
+        console.error("[alarm] sendDeviceCommand failed", error);
+      });
   }
 
   function handleRgbChange(device: Device, state: RgbState) {
@@ -184,10 +215,17 @@ export function CategoryClient({
                 targetTemp={selectedDevice.targetTemp}
                 fanSpeed={selectedDevice.fanSpeed}
                 swing={selectedDevice.swing}
+                sleepEnabled={selectedDevice.sleepEnabled}
+                sleepSubject={selectedDevice.sleepSubject}
+                sleepWakeTime={selectedDevice.sleepWakeTime}
+                sleepTargetTemp={selectedDevice.sleepTargetTemp}
                 hubName={hubNameFor(selectedDevice)}
                 currentTempSlot={<HubTemperatureReadout deviceId={realDeviceIdFor(selectedDevice)} />}
                 onChange={(state) => {
                   handleAcChange(selectedDevice, state);
+                }}
+                onSleepChange={(state) => {
+                  handleSleepChange(selectedDevice, state);
                 }}
               />
             )}
@@ -217,7 +255,7 @@ export function CategoryClient({
                 name={selectedDevice.name}
                 isOn={selectedDevice.isOn}
                 intensity={selectedDevice.intensity}
-                colorIndex={selectedDevice.colorIndex}
+                color={selectedDevice.color}
                 effect={selectedDevice.effect}
                 effectSpeed={selectedDevice.effectSpeed}
                 hubName={hubNameFor(selectedDevice)}
@@ -227,14 +265,24 @@ export function CategoryClient({
               />
             )}
             {selectedDevice.kind === "alarm" && (
-              <AlarmControlPanel
-                key={selectedDevice.id}
-                name={selectedDevice.name}
-                isOn={selectedDevice.isOn}
-                alarmTime={selectedDevice.alarmTime}
-                alarmDays={selectedDevice.alarmDays}
-                hubName={hubNameFor(selectedDevice)}
-              />
+              <>
+                {alarmSyncError && (
+                  <p className="mb-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {alarmSyncError}
+                  </p>
+                )}
+                <AlarmControlPanel
+                  key={selectedDevice.id}
+                  name={selectedDevice.name}
+                  isOn={selectedDevice.isOn}
+                  alarmTime={selectedDevice.alarmTime}
+                  alarmDays={selectedDevice.alarmDays}
+                  hubName={hubNameFor(selectedDevice)}
+                  onChange={(state) => {
+                    handleAlarmChange(selectedDevice, state);
+                  }}
+                />
+              </>
             )}
 
             <button
@@ -260,6 +308,11 @@ export function CategoryClient({
         description="This can't be undone."
         onConfirm={() => {
           if (!deleteTarget) return;
+          // The alarm's schedule lives on the hub itself (setSchedule/NVS); removing only the app's
+          // copy would leave a ghost alarm ringing on the hardware forever.
+          if (deleteTarget.kind === "alarm") {
+            removeAlarmFromHub(deleteTarget).catch(() => undefined);
+          }
           removeDevice(deleteTarget.id);
         }}
       />
