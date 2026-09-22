@@ -40,3 +40,6 @@ yarn-error.log*
 
 # Firebase Android config (per-project keys) — never commit.
 src-tauri/gen/android/app/google-services.json
+
+# Google OAuth desktop-app credentials — never commit.
+client_secret_*.json
