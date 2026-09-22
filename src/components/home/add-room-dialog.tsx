@@ -27,7 +27,7 @@ export function AddRoomDialog({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    addRoom(name, iconKey);
+    void addRoom(name, iconKey);
     setName("");
     setIconKey(ROOM_ICON_OPTIONS[0].key);
     onOpenChange(false);

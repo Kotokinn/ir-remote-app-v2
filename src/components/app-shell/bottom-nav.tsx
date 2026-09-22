@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/components/app-shell/nav-items";
+import { UnreadBadge } from "@/components/app-shell/unread-badge";
 import { cn } from "@/lib/utils";
 
 export function BottomNav() {
@@ -18,13 +19,16 @@ export function BottomNav() {
             href={href}
             className="flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-medium"
           >
-            <Icon
-              className={cn(
-                "size-5",
-                active ? "text-primary" : "text-muted-foreground"
-              )}
-              strokeWidth={active ? 2.4 : 2}
-            />
+            <span className="relative">
+              <Icon
+                className={cn(
+                  "size-5",
+                  active ? "text-primary" : "text-muted-foreground"
+                )}
+                strokeWidth={active ? 2.4 : 2}
+              />
+              {href === "/notifications" && <UnreadBadge className="-top-1.5 -right-2.5" />}
+            </span>
             <span className={cn(active ? "text-primary" : "text-muted-foreground")}>
               {label}
             </span>

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const THRESHOLD = 64;
 const MAX_PULL = 96;
+const CAPTURE_AFTER = 8;
 
 async function defaultRefresh() {
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -22,6 +23,8 @@ export function PullToRefresh({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const startY = useRef<number | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const capturedRef = useRef(false);
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,8 +33,8 @@ export function PullToRefresh({
     if (refreshing) return;
     if ((containerRef.current?.scrollTop ?? 0) > 0) return;
     startY.current = e.clientY;
-    setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    pointerIdRef.current = e.pointerId;
+    capturedRef.current = false;
   }
 
   function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
@@ -41,12 +44,22 @@ export function PullToRefresh({
       setPull(0);
       return;
     }
+    if (!capturedRef.current && delta > CAPTURE_AFTER && pointerIdRef.current !== null) {
+      capturedRef.current = true;
+      setDragging(true);
+      e.currentTarget.setPointerCapture(pointerIdRef.current);
+    }
     setPull(Math.min(delta * 0.5, MAX_PULL));
   }
 
-  function endDrag() {
-    if (startY.current === null) return;
+  function endDrag(e: PointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current === null) return;
+    if (capturedRef.current) {
+      e.currentTarget.releasePointerCapture(pointerIdRef.current);
+    }
     startY.current = null;
+    pointerIdRef.current = null;
+    capturedRef.current = false;
     setDragging(false);
 
     if (pull >= THRESHOLD) {

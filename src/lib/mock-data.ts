@@ -5,21 +5,21 @@ import {
   Blinds,
   PersonStanding,
   ShieldCheck,
+  Power,
+  AlarmClock,
   Lamp,
   Sun,
   Thermometer,
   Lock,
-  CalendarClock,
-  SlidersHorizontal,
   Bell,
   UserRound,
   ShieldQuestion,
   RefreshCw,
   LifeBuoy,
   Lightbulb as TipIcon,
-  Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import type { RemoteButton } from "@/lib/remote-buttons";
 
 export type CategoryId =
   | "lighting"
@@ -27,7 +27,9 @@ export type CategoryId =
   | "ir"
   | "curtains"
   | "sensors"
-  | "security";
+  | "security"
+  | "switches"
+  | "alarm";
 
 export interface Category {
   id: CategoryId;
@@ -43,18 +45,43 @@ export const CATEGORIES: Record<CategoryId, Category> = {
   curtains: { id: "curtains", name: "Curtains", icon: Blinds, color: "text-emerald-600" },
   sensors: { id: "sensors", name: "Sensors", icon: PersonStanding, color: "text-orange-500" },
   security: { id: "security", name: "Security", icon: ShieldCheck, color: "text-blue-600" },
+  switches: { id: "switches", name: "Switches", icon: Power, color: "text-fuchsia-500" },
+  alarm: { id: "alarm", name: "Alarm", icon: AlarmClock, color: "text-red-500" },
 };
+
+export type DeviceKind = "toggle" | "light" | "ac" | "remote" | "alarm" | "rgb";
+export type AcMode = "cool" | "heat" | "fan" | "auto" | "dry";
+export type FanSpeed = "low" | "medium" | "high" | "auto";
+export type RgbEffect = "solid" | "blink" | "breathe" | "flow";
 
 export interface Device {
   id: string;
   name: string;
   roomId: string;
   categoryId: CategoryId;
-  icon: LucideIcon;
   isOn: boolean;
+  kind: DeviceKind;
+  /** Physical hub/module (PhysicalDevice.id) this virtual device is derived from, if any. */
+  hubId?: string;
+  // light (kind: "light")
   mode?: "morning" | "day" | "night";
   intensity?: number;
   colorIndex?: number;
+  // ac (kind: "ac")
+  acMode?: AcMode;
+  targetTemp?: number;
+  fanSpeed?: FanSpeed;
+  swing?: boolean;
+  /** UI brand label picked in ac-setup.tsx, mapped to a real IR protocol name in lib/device/commands.ts. */
+  brand?: string;
+  // remote (kind: "remote")
+  buttons?: RemoteButton[];
+  // alarm (kind: "alarm")
+  alarmTime?: string;
+  alarmDays?: string[];
+  // rgb (kind: "rgb")
+  effect?: RgbEffect;
+  effectSpeed?: number;
 }
 
 export const SHADE_COLORS = [
@@ -71,12 +98,12 @@ export const SHADE_COLORS = [
   "#dc2626",
 ];
 
-// Devices are added by the user per room; there is no seeded/default device list.
-export const DEVICES: Device[] = [];
-
-export function roomCategories(roomId: string): Array<Category & { count: number }> {
+export function roomCategories(
+  devices: Device[],
+  roomId: string
+): Array<Category & { count: number }> {
   const counts = new Map<CategoryId, number>();
-  for (const device of DEVICES) {
+  for (const device of devices) {
     if (roomId !== "all" && device.roomId !== roomId) continue;
     counts.set(device.categoryId, (counts.get(device.categoryId) ?? 0) + 1);
   }
@@ -86,8 +113,8 @@ export function roomCategories(roomId: string): Array<Category & { count: number
   }));
 }
 
-export function categoryDevices(roomId: string, categoryId: string) {
-  return DEVICES.filter(
+export function categoryDevices(devices: Device[], roomId: string, categoryId: string) {
+  return devices.filter(
     (d) => (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId
   );
 }
@@ -118,53 +145,41 @@ export const FAVORITES: FavoriteDevice[] = [
   { id: "fav-presence", name: "Presence mode", icon: PersonStanding, isOn: true, controllable: false },
 ];
 
+export interface SceneAction {
+  deviceId: string;
+  patch: Partial<
+    Pick<
+      Device,
+      | "isOn"
+      | "mode"
+      | "intensity"
+      | "colorIndex"
+      | "acMode"
+      | "targetTemp"
+      | "fanSpeed"
+      | "swing"
+      | "effect"
+      | "effectSpeed"
+    >
+  >;
+}
+
 export interface Scene {
   id: string;
   name: string;
-  deviceCount: number;
+  actions: SceneAction[];
 }
-
-export const SCENES: Scene[] = [
-  { id: "scene-going-out", name: "Going out", deviceCount: 15 },
-  { id: "scene-movie-night", name: "Movie night", deviceCount: 8 },
-  { id: "scene-good-morning", name: "Good morning", deviceCount: 10 },
-  { id: "scene-bedtime", name: "Bedtime", deviceCount: 12 },
-];
 
 export interface Schedule {
   id: string;
   name: string;
-  deviceCount: number;
+  sceneId: string;
   startAt: string;
-  endAt: string;
-  days: string[];
+  days: number[];
+  hasEnd: boolean;
+  endAt?: string;
+  enabled: boolean;
 }
-
-export const SCHEDULES: Schedule[] = [
-  { id: "sch-going-out", name: "Going out", deviceCount: 15, startAt: "8:00 AM", endAt: "9:00 AM", days: ["M", "T", "S"] },
-  { id: "sch-dinner", name: "Having Dinner", deviceCount: 15, startAt: "7:30 PM", endAt: "8:30 PM", days: ["M", "T", "W", "T", "F"] },
-  { id: "sch-relax", name: "Relax time", deviceCount: 15, startAt: "9:00 PM", endAt: "10:00 PM", days: ["S", "S"] },
-  { id: "sch-excercise", name: "Excercise", deviceCount: 15, startAt: "8:00 AM", endAt: "9:00 AM", days: ["M", "T", "S"] },
-  { id: "sch-bathing", name: "Bathing", deviceCount: 15, startAt: "7:00 AM", endAt: "7:30 AM", days: ["M", "T", "W", "T", "F", "S", "S"] },
-];
-
-export const SCHEDULE_ICON = SlidersHorizontal;
-export const SCHEDULE_TIME_ICON = CalendarClock;
-
-export interface AppNotification {
-  id: string;
-  title: string;
-  body: string;
-  time: string;
-  icon: LucideIcon;
-}
-
-export const NOTIFICATIONS: AppNotification[] = [
-  { id: "n1", title: "Wifi connection lost", body: "Bedroom hub went offline. Devices may not respond.", time: "2m ago", icon: Radio },
-  { id: "n2", title: "Scene activated", body: "“Going out” turned off 15 devices.", time: "1h ago", icon: Sparkles },
-  { id: "n3", title: "Front door lock", body: "Locked automatically at 11:00 PM.", time: "Yesterday", icon: Lock },
-  { id: "n4", title: "Schedule reminder", body: "“Excercise” schedule starts in 10 minutes.", time: "Yesterday", icon: CalendarClock },
-];
 
 export interface SettingsItem {
   id: string;

@@ -4,18 +4,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { signInWithGoogle } from "@/lib/auth/google-oauth";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleGoogleSignIn() {
+  async function handleGoogleSignIn() {
     setLoading(true);
-    // TODO: replace with real Google Identity Services sign-in once a
-    // Google Cloud OAuth Client ID is configured for this app.
-    setTimeout(() => {
+    setError(null);
+    try {
+      await signInWithGoogle();
       router.push("/home");
-    }, 600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -32,7 +38,9 @@ export default function LoginPage() {
 
       <button
         type="button"
-        onClick={handleGoogleSignIn}
+        onClick={() => {
+          void handleGoogleSignIn();
+        }}
         disabled={loading}
         className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-sm font-semibold shadow-sm transition-colors hover:bg-accent/40 disabled:opacity-60"
       >
@@ -43,6 +51,8 @@ export default function LoginPage() {
         )}
         {loading ? "Signing in…" : "Continue with Google"}
       </button>
+
+      {error && <p className="text-center text-xs text-destructive">{error}</p>}
 
       <p className="text-center text-xs text-muted-foreground">
         By continuing, you agree to let this app manage your smart home

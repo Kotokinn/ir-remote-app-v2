@@ -3,5 +3,19 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "deep-link:default",
+    "blec:default",
+    "fcm:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://accounts.google.com/*" },
+        { "url": "https://oauth2.googleapis.com/*" },
+        { "url": "http://localhost:18080/*" }
+      ]
+    }
+  ]
 }

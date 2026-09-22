@@ -37,3 +37,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Firebase Android config (per-project keys) — never commit.
+src-tauri/gen/android/app/google-services.json

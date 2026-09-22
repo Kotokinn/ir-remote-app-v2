@@ -1,0 +1,2942 @@
+#include "IR_UNIVERSAL_ENGINE.h"
+#include "NTC_THERMISTOR.h"
+#include "ConfigStorage.h"
+#include "MQTT_CILENT.h"
+#include "RTC_MANAGER.h"
+#include "WIFI_CLIENT.h"
+#include "TIMEZONE.h"
+#include "BLEMQTT.h"
+#include "TLP5010.h"
+#include "LED_RGB.h"
+#include "BUZZER.h"
+#include "config.h"
+#include "BUTTON.h"
+#include "EEPROM24LC512.h"
+#include "DEVICE_PROVISIONING_CLIENT.h"
+#include "SMART_SLEEP_MODE.h"
+#include "NETWORK_RESOURCES.h"
+#include "device_identity.h"
+#include <HTTPClient.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <vector>
+
+#define STACK_SIZE 4096
+#define TASK_STACK_NETWORK 6144
+#define TASK_STACK_MQTT_QUEUE 6144
+#define TASK_STACK_INIT_CONFIG 8192
+#define TASK_STACK_BUTTONS 4096
+#define TASK_STACK_IR_LOGIC 3072
+#define TASK_STACK_ROOM_TEMP 3072
+#define TASK_STACK_WATCHDOG 1024
+#define TASK_STACK_HEARTBEAT 12288
+#define TASK_STACK_AUTO_SCHEDULER 2560
+#define TASK_STACK_LED 2048
+#define TASK_STACK_IR_RX 2048
+#define TASK_STACK_BUZZER 2048
+
+#define IR_QUEUE_LENGTH 2
+#define MQTT_QUEUE_LENGTH 3
+#define INIT_QUEUE_LENGTH 1
+#define TIME_SYNC_QUEUE_LENGTH 2
+#define RAM_LOG_INTERVAL_MS 30000UL
+
+const char *main_feature[] = {
+    "/alarm",
+    "/action",
+    "/led",
+    "/control",
+    "/init",
+    "/auto", // just use schedule
+    "/pair",
+    "/scence", // smart auto change temp
+};
+const char *sub_feature[] = {
+    "/set",
+    "/delete",
+    "/info",
+    "/auto", // timer feature
+};
+// SLEEP_MODE
+stdAc::state_t currentAcState{};
+
+struct InitPayload
+{
+  char json[512];
+};
+struct MQTTMessage
+{
+  char topic[128];
+  char payload[BUFFER_SIZE_MQTT];
+};
+struct IRMessage
+{
+  uint16_t *rawData;
+  uint16_t length;
+};
+
+struct NotificationMessage
+{
+  char user[128];
+  char pass[128];
+  char title[64];
+  char body[256];
+  char firmwareVersion[32];
+  bool confirmsPreOta;
+};
+
+bool isWifiConnecting = false;
+
+NTC_THERMISTOR ntcTemp(NTC_ADC_PIN, 8200.0, 6390.0, 3950.0);
+
+TLP5010 wd(WATCHDOG_RESET_PIN);
+
+IR_UNIVERSAL_ENGINE irManager(IR_SEND_PIN, IR_RECEIVE_PIN);
+char lastScannedBrand[48] = {0};
+int currentProtocolIndex = -1;
+decode_type_t lastScannedProtocol = decode_type_t::UNKNOWN;
+BUTTON forceOffAlarm(RESET_BUTTON_PIN);
+
+TIMEZONE timeManager;
+RTC_MANAGER rtc;
+
+BUZZER buzzerSystem(BUZZER_PIN);
+
+MQTT_CILENT *client = nullptr;
+ConfigStorage config("/config.json");
+ConfigStorage autoConfig("/autoConfig.json");
+ConfigStorage storage("/savedControll.json");
+ConfigStorage ledAndAlarm("/ledAndAlarm.json");
+// ConfigStorage smartSence("/smartSence.json");
+static decode_type_t smartSleepProtocol = decode_type_t::UNKNOWN;
+
+bool isWifiMode = false;
+bool isRemoteLearing = false; // REMOTE LEARNING MODE
+char learningDeviceName[64] = {0};
+char learningBrand[48] = {0};
+char learningKey[64] = {0};
+char learningName[96] = {0};
+char deviceSerialNumber[64] = {0};
+bool serialRomAvailable = false; // EEPROM optional: true only when 24LC512 is detected.
+static volatile uint32_t irRxMutedUntilMs = 0;
+static volatile bool fastLedReady = false;
+static volatile bool otaLedOverride = false;
+static volatile uint8_t otaLedPosition = 0;
+DateTime now(2000, 1, 1, 0, 0, 0);
+
+CRGB leds[NUM_LEDS];
+LED_RGB rgb(leds, NUM_LEDS);
+EEPROM24LC512 serialRom(Wire, DEVICE_SERIAL_EEPROM_I2C_ADDR);
+// Các transport được tạo đúng một lần và dùng chung bằng tham chiếu.
+WiFiClient sharedPlainClient;
+WiFiClient sharedMqttClient;
+WiFiClientSecure sharedSecureClient;
+NetworkResources networkResources{sharedPlainClient, sharedSecureClient};
+DeviceProvisioningClient deviceApi(networkResources);
+
+static bool isIrReceiverMuted()
+{
+  return (int32_t)(millis() - irRxMutedUntilMs) < 0;
+}
+
+TaskHandle_t xTimeSyncTaskHandle = NULL;
+TaskHandle_t xBuzzerTaskHandle = NULL;
+TaskHandle_t xMqttTaskHandle = NULL;
+TaskHandle_t xTaskIRHandle = NULL;
+TaskHandle_t xTaskRoomTemp = NULL;
+TaskHandle_t xTaskSleep = NULL;
+TaskHandle_t xTaskInit = NULL;
+
+QueueHandle_t notificationQueue;
+QueueHandle_t timeSyncQueue;
+QueueHandle_t initQueue;
+QueueHandle_t mqttQueue;
+QueueHandle_t irQueue;
+
+SemaphoreHandle_t i2cMutex, irMutex, networkMutex;
+
+void taskProcessMqttMessages(void *pvParameters);
+void taskTimeSyncStable(void *pvParameters);
+void taskAutoScheduler(void *pvParameters);
+void taskNetworkMqtt(void *pvParameters);
+void taskHeartbeat(void *pvParameters);
+// void taskTimeSync(void *pvParameters);
+void taskWatchdog(void *pvParameters);
+void taskRoomTemp(void *pvParameters);
+void taskButtons(void *pvParameters);
+void taskBuzzer(void *pvParameters);
+void taskProcessIRLogic(void *pv);
+void taskLED(void *pvParameters);
+void taskIR(void *pvParameters);
+void taskInitConfig(void *pv);
+void taskNotification(void *pv);
+void taskSleep(void *pv);
+
+// NOTIFICATION
+bool notificationForUserApp(const char *user, const char *password, const char *title, const char *content);
+// SLEEP
+
+bool startSmartSleep(
+    decode_type_t protocol,
+    bool power,
+    float setpointC,
+    stdAc::fanspeed_t fan,
+    stdAc::swingv_t swing,
+    stdAc::opmode_t mode,
+    uint8_t wakeHour,
+    uint8_t wakeMinute);
+void stopSmartSleep();
+// MQTT CALLBACK
+void mqttCallback(const char *topic, const char *payload);
+BuzzerAlarmMode parseAlarmMode(const char *modeStr);
+LedMode parseLedMode(const char *modeStr);
+void restoreSavedLedState();
+void setUpdateLoadingLed(bool inProgress);
+void notifyFirmwareUpdate(const char *version, bool completed);
+String getDeviceTopicBase();
+String getLegacyDeviceTopicBase();
+bool topicEquals(const char *topic, const String &base, const char *suffix);
+// void publishDeviceDiscovery();
+String getInitDeviceName(JsonDocument &doc);
+bool isValidDeviceSerialNumber(const String &serialNumber);
+String readStoredSerialNumber();
+void logStoredSerialNumber();
+bool createPinnedTask(TaskFunction_t taskCode, const char *name, uint32_t stackSize, UBaseType_t priority, TaskHandle_t *handle, BaseType_t core);
+void logTaskMemory(const char *taskName, uint32_t &lastLogMs);
+bool buildDeviceTopic(char *buffer, size_t bufferSize, const char *suffix);
+
+bool createPinnedTask(TaskFunction_t taskCode, const char *name, uint32_t stackSize, UBaseType_t priority, TaskHandle_t *handle, BaseType_t core)
+{
+  BaseType_t ok = xTaskCreatePinnedToCore(taskCode, name, stackSize, NULL, priority, handle, core);
+  if (ok != pdPASS)
+  {
+    Serial.printf("[TASK] Failed to create %s stack=%lu freeHeap=%lu\n",
+                  name, (unsigned long)stackSize, (unsigned long)ESP.getFreeHeap());
+    return false;
+  }
+
+  Serial.printf("[TASK] Created %-18s stack=%lu heap=%lu max=%lu\n",
+                name,
+                (unsigned long)stackSize,
+                (unsigned long)ESP.getFreeHeap(),
+                (unsigned long)ESP.getMaxAllocHeap());
+  return true;
+}
+
+void logTaskMemory(const char *taskName, uint32_t &lastLogMs)
+{
+  uint32_t now = millis();
+  if ((uint32_t)(now - lastLogMs) < RAM_LOG_INTERVAL_MS)
+    return;
+
+  lastLogMs = now;
+  const UBaseType_t stackWords = uxTaskGetStackHighWaterMark(NULL);
+  Serial.printf("[MEM] %s heap=%lu minHeap=%lu stackFreeWords=%u stackFreeBytes=%u\n",
+                taskName,
+                (unsigned long)ESP.getFreeHeap(),
+                (unsigned long)ESP.getMinFreeHeap(),
+                (unsigned int)stackWords,
+                (unsigned int)(stackWords * sizeof(StackType_t)));
+}
+
+bool buildDeviceTopic(char *buffer, size_t bufferSize, const char *suffix)
+{
+  if (!buffer || bufferSize == 0)
+    return false;
+
+  String base = getDeviceTopicBase();
+  int written = snprintf(buffer, bufferSize, "%s%s", base.c_str(), suffix ? suffix : "");
+  return written > 0 && (size_t)written < bufferSize;
+}
+
+String getMqttOwner()
+{
+  String owner = config.get<String>(JsonKeys::user, "");
+  owner.trim();
+  if (owner.length() == 0)
+    owner = "unclaimed";
+  owner.replace("/", "_");
+  return owner;
+}
+
+String sanitizeTopicPart(String value)
+{
+  value.trim();
+  if (value.length() == 0)
+    value = DEVICE_NAME;
+
+  // value.replace("/", "_");
+  // value.replace("\\", "_");
+  // value.replace("#", "_");
+  // value.replace("+", "_");
+  // value.replace(" ", "_");
+  return value;
+}
+
+String getMqttDeviceName()
+{
+  return sanitizeTopicPart(config.get<String>(JsonKeys::name, DEVICE_NAME));
+}
+
+String getInitDeviceName(JsonDocument &doc)
+{
+  String name = doc["roomName"] | "";
+  name.trim();
+  if (name.length() == 0)
+  {
+    name = doc["deviceName"] | "";
+    name.trim();
+  }
+  if (name.length() == 0)
+  {
+    name = doc["name"] | DEVICE_NAME;
+    name.trim();
+  }
+  if (name.length() == 0)
+    name = DEVICE_NAME;
+
+  return name;
+}
+
+String getDeviceTopicBase()
+{
+  return "users/" + getMqttOwner() + "/devices/" + getMqttDeviceName();
+}
+
+String getLegacyDeviceTopicBase()
+{
+  return "device/" + config.get<String>(JsonKeys::name, DEVICE_NAME);
+}
+
+bool topicEquals(const char *topic, const String &base, const char *suffix)
+{
+  return topic && strcmp(topic, (base + suffix).c_str()) == 0;
+}
+
+bool isValidDeviceSerialNumber(const String &serialNumber)
+{
+  if (serialNumber.length() < 8 || serialNumber.length() > 48)
+    return false;
+
+  if (!serialNumber.startsWith("HUB"))
+    return false;
+
+  for (size_t i = 0; i < serialNumber.length(); i++)
+  {
+    char c = serialNumber.charAt(i);
+    bool validChar = (c >= 'A' && c <= 'Z') ||
+                     (c >= 'a' && c <= 'z') ||
+                     (c >= '0' && c <= '9') ||
+                     c == '_' ||
+                     c == '-';
+    if (!validChar)
+      return false;
+  }
+
+  return true;
+}
+
+String readStoredSerialNumber()
+{
+  if (!serialRomAvailable)
+  {
+    return "";
+  }
+
+  String serialNumber = "";
+  if (serialRom.readString(DEVICE_SERIAL_EEPROM_ADDR, serialNumber) && serialNumber.length() > 0)
+  {
+    serialNumber.trim();
+    if (isValidDeviceSerialNumber(serialNumber))
+      return serialNumber;
+
+    Serial.printf("[EEPROM] Ignore invalid serialNumber=%s\n", serialNumber.c_str());
+  }
+
+  char rawSerial[65] = {0};
+  if (serialRom.read(DEVICE_SERIAL_EEPROM_ADDR, (uint8_t *)rawSerial, sizeof(rawSerial) - 1))
+  {
+    for (size_t i = 0; i < sizeof(rawSerial) - 1; i++)
+    {
+      if (rawSerial[i] == '\0' || rawSerial[i] == (char)0xFF)
+      {
+        rawSerial[i] = '\0';
+        break;
+      }
+    }
+
+    String rawValue = String(rawSerial);
+    rawValue.trim();
+    if (rawValue.length() > 0 && isValidDeviceSerialNumber(rawValue))
+    {
+      return rawValue;
+    }
+    if (rawValue.length() > 0)
+      Serial.printf("[EEPROM] Ignore invalid raw serialNumber=%s\n", rawValue.c_str());
+  }
+
+  return "";
+}
+
+void logStoredSerialNumber()
+{
+  // EEPROM optional: avoid probing/reading again if setup() did not detect the chip.
+  if (!serialRomAvailable)
+  {
+    Serial.printf("[EEPROM] 24LC512 not found on I2C bus addr=0x%02X\n", DEVICE_SERIAL_EEPROM_I2C_ADDR);
+    const String fallbackSerialNumber = getOrCreateRandomDeviceSerial();
+    strlcpy(deviceSerialNumber, fallbackSerialNumber.c_str(), sizeof(deviceSerialNumber));
+    Serial.printf("[EEPROM] MQTT clientId fallback=%s\n", deviceSerialNumber);
+    return;
+  }
+
+  String serialNumber = readStoredSerialNumber();
+  if (serialNumber.length() > 0)
+  {
+    strlcpy(deviceSerialNumber, serialNumber.c_str(), sizeof(deviceSerialNumber));
+    Serial.printf("[EEPROM] serialNumber=%s\n", deviceSerialNumber);
+  }
+  else
+  {
+    const String fallbackSerialNumber = getOrCreateRandomDeviceSerial();
+    strlcpy(deviceSerialNumber, fallbackSerialNumber.c_str(), sizeof(deviceSerialNumber));
+    Serial.printf("[EEPROM] serialNumber not found at memAddr=%u\n", DEVICE_SERIAL_EEPROM_ADDR);
+    Serial.printf("[EEPROM] MQTT clientId fallback=%s\n", deviceSerialNumber);
+  }
+}
+
+void setup()
+{
+  Serial.begin(SERIAL_BAUD_RATE);
+
+  wd.begin();
+
+  // Create synchronization primitives before the first I2C/network operation.
+  i2cMutex = xSemaphoreCreateMutex();
+  irMutex = xSemaphoreCreateMutex();
+  networkMutex = xSemaphoreCreateMutex();
+
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000);
+  serialRomAvailable = serialRom.isConnected();
+  if (serialRomAvailable)
+  {
+    deviceApi.setSerialStorage(serialRom);
+  }
+
+  // serialRomAvailable = false;
+  Serial.printf("[EEPROM] 24LC512 SDA=%d SCL=%d I2C_ADDR=0x%02X %s\n",
+                I2C_SDA_PIN, I2C_SCL_PIN, DEVICE_SERIAL_EEPROM_I2C_ADDR,
+                serialRomAvailable ? "connected" : "not connected");
+  logStoredSerialNumber();
+  config.begin();
+  ntcTemp.begin();
+  storage.begin();
+  irManager.begin();
+  autoConfig.begin();
+  ledAndAlarm.begin();
+  timeManager.begin();
+  forceOffAlarm.begin();
+  rtc.begin();
+
+  // Serial.println("Config loaded!");
+
+  irQueue = xQueueCreate(IR_QUEUE_LENGTH, sizeof(IRMessage));
+  timeSyncQueue = xQueueCreate(TIME_SYNC_QUEUE_LENGTH, sizeof(bool));
+  initQueue = xQueueCreate(INIT_QUEUE_LENGTH, sizeof(InitPayload));
+  mqttQueue = xQueueCreate(MQTT_QUEUE_LENGTH, sizeof(MQTTMessage));
+  notificationQueue = xQueueCreate(3, sizeof(NotificationMessage));
+  // init
+
+  String alarmSavedMode = ledAndAlarm.get<String>("alarmMode", "OFF");
+  int savedVolumn = ledAndAlarm.get<int>("volumn", 50);
+  bool crescendo = ledAndAlarm.get<int>("crescendo", false);
+
+  buzzerSystem.setVolume(savedVolumn);
+  buzzerSystem.setCrescendo(crescendo);
+  buzzerSystem.setAlarmMode(parseAlarmMode(alarmSavedMode.c_str()));
+
+  restoreSavedLedState();
+  deviceApi.setUpdateStateCallback(setUpdateLoadingLed);
+  deviceApi.setFirmwareUpdateCallback(notifyFirmwareUpdate);
+
+  rtc.restartRTC();
+
+  Serial.printf("[RTC TICK] Giờ RTC hiện tại: %02d:%02d:%02d | Thứ: %d\n");
+
+  createPinnedTask(taskNetworkMqtt, "NetworkMqttTask", TASK_STACK_NETWORK, configMAX_PRIORITIES, &xMqttTaskHandle, 1);
+  createPinnedTask(taskTimeSyncStable, "taskTimeSync", 3072, configMAX_PRIORITIES - 2, &xTimeSyncTaskHandle, 1);
+  createPinnedTask(taskButtons, "taskButtons", TASK_STACK_BUTTONS, configMAX_PRIORITIES - 3, NULL, 1);
+  createPinnedTask(taskProcessIRLogic, "Task_IR_Logic", TASK_STACK_IR_LOGIC, 7, NULL, 1);
+  createPinnedTask(taskProcessMqttMessages, "MQTT_QUEUE", TASK_STACK_MQTT_QUEUE, 6, NULL, 1);
+  createPinnedTask(taskInitConfig, "INIT_CONFIG", TASK_STACK_INIT_CONFIG, 6, &xTaskInit, 1);
+  createPinnedTask(taskRoomTemp, "taskRoomTemp", TASK_STACK_ROOM_TEMP, 5, &xTaskRoomTemp, 1);
+  createPinnedTask(taskWatchdog, "taskWatchdog", TASK_STACK_WATCHDOG, 4, NULL, 1);
+  createPinnedTask(taskNotification, "taskNotification", 10240, 3, NULL, 1);
+  createPinnedTask(taskLED, "TaskLED", TASK_STACK_LED, 4, NULL, 1);
+  createPinnedTask(taskHeartbeat, "taskHeartbeat", TASK_STACK_HEARTBEAT, 3, NULL, 1);
+  createPinnedTask(taskAutoScheduler, "AutoScheduler", TASK_STACK_AUTO_SCHEDULER, 2, NULL, 1);
+  createPinnedTask(taskIR, "taskIR", TASK_STACK_IR_RX, configMAX_PRIORITIES, NULL, 0);
+  createPinnedTask(taskBuzzer, "taskBuzzer", TASK_STACK_BUZZER, 3, &xBuzzerTaskHandle, 0);
+  createPinnedTask(taskSleep, "taskSleep", TASK_STACK_SLEEP, TASK_PRIORITY_SLEEP, &xTaskSleep, 1);
+}
+
+void loop() { delay(1); }
+
+// EXTEND FUNC
+bool isTimeInWindow(int curH, int curM, int startH, int startM, int endH, int endM)
+{
+  int current = curH * 60 + curM;
+  int start = startH * 60 + startM;
+  int end = endH * 60 + endM;
+  if (start <= end)
+    return (current >= start && current < end);
+  return (current >= start || current < end); // Trường hợp chạy xuyên đêm
+}
+
+int timeToMinutes(int hour, int minute)
+{
+  return hour * 60 + minute;
+}
+
+bool isCurrentTimeInWindow(int curH, int curM, int startH, int startM, int endH, int endM)
+{
+  int current = timeToMinutes(curH, curM);
+  int start = timeToMinutes(startH, startM);
+  int end = timeToMinutes(endH, endM);
+
+  if (start <= end)
+  {
+    // Chu kỳ trong cùng một ngày (Ví dụ: 08:00 đến 17:00)
+    return (current >= start && current < end);
+  }
+  else
+  {
+    // Chu kỳ xuyên đêm (Ví dụ: 22:00 đến 06:00 hôm sau)
+    return (current >= start || current < end);
+  }
+}
+
+LedMode parseLedMode(const char *modeStr)
+{
+  if (strcmp(modeStr, JsonKeys::LED_OFF) == 0)
+    return LED_OFF;
+  if (strcmp(modeStr, JsonKeys::STATIC) == 0)
+    return LED_STATIC;
+  if (strcmp(modeStr, JsonKeys::ROTATING) == 0)
+    return LED_ROTATING;
+  if (strcmp(modeStr, JsonKeys::BREATHING) == 0)
+    return LED_BREATHING;
+  if (strcmp(modeStr, JsonKeys::WAVE) == 0)
+    return LED_WAVE;
+  if (strcmp(modeStr, JsonKeys::RAINBOW) == 0)
+    return LED_RAINBOW;
+  if (strcmp(modeStr, JsonKeys::STROBE) == 0)
+    return LED_STROBE;
+  if (strcmp(modeStr, JsonKeys::SPARKLE) == 0)
+    return LED_SPARKLE;
+  if (strcmp(modeStr, JsonKeys::CONFETTI) == 0)
+    return LED_CONFETTI;
+  if (strcmp(modeStr, JsonKeys::POLICE) == 0)
+    return LED_POLICE;
+  if (strcmp(modeStr, JsonKeys::COLOR_WIPE) == 0)
+    return LED_COLOR_WIPE;
+  if (strcmp(modeStr, JsonKeys::FIRE) == 0)
+    return LED_FIRE;
+
+  return LED_STATIC; // Mặc định nếu chuỗi gửi lên không khớp
+}
+
+BuzzerAlarmMode parseAlarmMode(const char *modeStr)
+{
+  if (!modeStr || strlen(modeStr) == 0)
+    return ALARM_OFF;
+
+  if (strcmp(modeStr, JsonKeys::OFF) == 0)
+    return ALARM_OFF;
+  else if (strcmp(modeStr, JsonKeys::SHORT_BEEP) == 0)
+    return ALARM_SHORT_BEEP;
+  else if (strcmp(modeStr, JsonKeys::LONG_BEEP) == 0)
+    return ALARM_LONG_BEEP;
+  else if (strcmp(modeStr, JsonKeys::SLOW) == 0)
+    return ALARM_SLOW;
+  else if (strcmp(modeStr, JsonKeys::FAST) == 0)
+    return ALARM_FAST;
+  else if (strcmp(modeStr, JsonKeys::SIREN) == 0)
+    return ALARM_SIREN_TWO_TONE;
+  else if (strcmp(modeStr, JsonKeys::AMBULANCE) == 0)
+    return ALARM_AMBULANCE;
+  else if (strcmp(modeStr, JsonKeys::WAKEUP) == 0)
+    return ALARM_WAKEUP; // <--- THÊM DÒNG NÀY
+
+  return ALARM_OFF;
+}
+
+void restoreSavedLedState()
+{
+  String ledSavedMode = ledAndAlarm.get<String>("ledMode", "STATIC");
+  String savedColor = ledAndAlarm.get<String>("color", "#0000FF");
+  int savedSpeed = ledAndAlarm.get<int>("speed", 50);
+  int savedBrightness = ledAndAlarm.get<int>("brightness", 120);
+
+  rgb.setMode(parseLedMode(ledSavedMode.c_str()));
+  rgb.setColor(rgb.parseHexColor(savedColor.c_str()));
+  rgb.setSpeed(savedSpeed);
+  rgb.setBrightness(savedBrightness);
+}
+
+void setUpdateLoadingLed(bool inProgress)
+{
+  if (inProgress)
+  {
+    Serial.println("[OTA] LED loading ON");
+    otaLedOverride = true;
+    otaLedPosition = 0;
+    if (fastLedReady)
+    {
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      leds[otaLedPosition] = CRGB::Red;
+      FastLED.setBrightness(180);
+      FastLED.show();
+    }
+  }
+  else
+  {
+    Serial.println("[OTA] LED loading OFF");
+    otaLedOverride = false;
+    restoreSavedLedState();
+    if (fastLedReady)
+    {
+      rgb.update();
+      FastLED.show();
+    }
+  }
+}
+
+void notifyFirmwareUpdate(const char *version, bool completed)
+{
+  String user = config.get<String>(JsonKeys::user, "");
+  String password = config.get<String>(JsonKeys::user_pass, "");
+  String deviceName = config.get<String>(JsonKeys::name, DEVICE_NAME);
+
+  user.trim();
+  if (user.length() == 0 || password.length() == 0)
+  {
+    Serial.println("[OTA NOTIFICATION] Missing user or password");
+    return;
+  }
+
+  char content[256];
+  if (completed)
+  {
+    snprintf(content, sizeof(content),
+             "Thiết bị %s đã cập nhật firmware phiên bản %s thành công và sẽ khởi động lại.",
+             deviceName.c_str(), version);
+  }
+  else
+  {
+    snprintf(content, sizeof(content),
+             "Thiết bị %s đã nhận firmware phiên bản %s và đang tiến hành cập nhật.",
+             deviceName.c_str(), version);
+  }
+
+  if (notificationQueue == nullptr)
+  {
+    Serial.println("[OTA NOTIFICATION] Queue unavailable");
+    return;
+  }
+
+  NotificationMessage message{};
+  strlcpy(message.user, user.c_str(), sizeof(message.user));
+  strlcpy(message.pass, password.c_str(), sizeof(message.pass));
+  strlcpy(message.title, "Smart IR - Cập nhật firmware", sizeof(message.title));
+  strlcpy(message.body, content, sizeof(message.body));
+  strlcpy(message.firmwareVersion, version, sizeof(message.firmwareVersion));
+  message.confirmsPreOta = !completed;
+
+  const BaseType_t queued = xQueueSend(notificationQueue, &message, 0);
+  Serial.printf("[OTA NOTIFICATION] %s notification %s\n",
+                completed ? "Completed" : "Started",
+                queued == pdTRUE ? "queued" : "queue-full");
+}
+
+void featureChangeLedMode(const char *mode, int speed, int brightness, const char *hexColor)
+{
+  if (mode != nullptr && strlen(mode) > 0)
+  {
+    LedMode targetMode = parseLedMode(mode);
+    rgb.setMode(targetMode);
+    ledAndAlarm.set("ledMode", mode);
+  }
+  else
+  {
+    String oldModeStr = ledAndAlarm.get<String>("ledMode", "STATIC");
+    rgb.setMode(parseLedMode(oldModeStr.c_str()));
+  }
+
+  if (hexColor != nullptr && strlen(hexColor) > 0)
+  {
+    CRGB newColor = rgb.parseHexColor(hexColor);
+    rgb.setColor(newColor);
+    ledAndAlarm.set("color", hexColor);
+  }
+  else
+  {
+    String oldColorHex = ledAndAlarm.get<String>("color", "#0000FF");
+    rgb.setColor(rgb.parseHexColor(oldColorHex.c_str()));
+  }
+
+  if (speed > 0)
+  {
+    rgb.setSpeed(speed);
+    ledAndAlarm.set("speed", speed);
+  }
+  else
+  {
+    int oldSpeed = ledAndAlarm.get<int>("speed", 50);
+    rgb.setSpeed(oldSpeed);
+  }
+
+  if (brightness >= 0 && brightness <= 255)
+  {
+    rgb.setBrightness(brightness);
+    ledAndAlarm.set("brightness", brightness);
+  }
+  else
+  {
+    int oldBrightness = ledAndAlarm.get<int>("brightness", 120);
+    rgb.setBrightness(oldBrightness);
+  }
+
+  ledAndAlarm.save();
+
+  Serial.println("[LED CONTROL] Đã đồng bộ trạng thái Stateful và lưu Flash thành công!");
+}
+
+void featureAlarm(const char *mode, int volumn, bool crescendo = false)
+{
+  if (mode != nullptr && strlen(mode) > 0)
+  {
+    BuzzerAlarmMode newAlarm = parseAlarmMode(mode);
+    buzzerSystem.setAlarmMode(newAlarm);
+    ledAndAlarm.set("alarmMode", mode);
+  }
+  else
+  {
+    String oldModeStr = ledAndAlarm.get<String>("mode", "OFF");
+    buzzerSystem.setAlarmMode(parseAlarmMode(oldModeStr.c_str()));
+  }
+
+  if (volumn >= 0 && volumn <= 100)
+  {
+    buzzerSystem.setVolume(volumn);
+    ledAndAlarm.set("volumn", volumn);
+  }
+  else
+  {
+    int oldVolumn = ledAndAlarm.get<int>("volumn", 50);
+    buzzerSystem.setVolume(oldVolumn);
+  }
+
+  if (crescendo)
+    ledAndAlarm.set("crescendo", crescendo);
+
+  ledAndAlarm.save();
+
+  Serial.printf("[ALARM CONTROL] Trạng thái hiện tại -> Mode: %s | Volume: %d%%\n",
+                ledAndAlarm.get<String>("mode", "OFF").c_str(),
+                ledAndAlarm.get<int>("volumn", 50));
+}
+
+void featureInitConfig(const char *name, const char *ssid, const char *ssid_pass, const char *user, const char *user_pass, const char *time_zone)
+{
+  Serial.println("\n[INIT] --- BẮT ĐẦU KIỂM TRA & KẾT NỐI THỬ ---");
+
+  if (!ssid || strlen(ssid) == 0)
+  {
+    Serial.println("[INIT] Lỗi: SSID Wifi không được để trống!");
+    client->publish("device/res", "ERROR: Empty SSID", false);
+    return;
+  }
+
+  if (user && strlen(user) > 0 && strlen(user) < 3)
+  {
+    Serial.println("[INIT] Lỗi: Tài khoản 'user' quá ngắn!");
+    client->publish("device/res", "ERROR: User too short", false);
+    return;
+  }
+  if (user_pass && strlen(user_pass) > 0 && strlen(user_pass) < 4)
+  {
+    Serial.println("[INIT] Lỗi: Mật khẩu 'user_pass' quá ngắn!");
+    client->publish("device/res", "ERROR: Password too short", false);
+    return;
+  }
+
+  Serial.println("[INIT] Dữ liệu hợp lệ. Đang nạp vào bộ nhớ đệm...");
+
+  Serial.printf("[INIT] Đang thử kết nối vào mạng Wifi mới: %s ...\n", ssid);
+
+  vTaskDelay(pdMS_TO_TICKS(500));
+  WiFi.config(
+      INADDR_NONE,
+      INADDR_NONE,
+      INADDR_NONE,
+      IPAddress(1, 1, 1, 1),
+      IPAddress(8, 8, 8, 8));
+  WiFi.begin(ssid, ssid_pass);
+
+  int attempts = 0;
+  const int maxAttempts = 30;
+  bool wifiConnected = false;
+  bool configViaBle = !isWifiMode;
+
+  while (attempts < maxAttempts)
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      wifiConnected = true;
+      break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+    Serial.print(".");
+    attempts++;
+  }
+  Serial.println(); // Xuống hàng sau chuỗi dấu chấm
+
+  if (!wifiConnected)
+  {
+    Serial.println("[INIT] Thất bại: Không thể kết nối tới Wifi mới với thông tin đã cung cấp!");
+    client->publish("device/res", "FAILED_TO_CONNECT_WIFI", false);
+    return;
+  }
+
+  Serial.println("[INIT]  Wifi kết nối thành công!");
+  Serial.printf("[INIT] IP Address: %s\n", WiFi.localIP().toString().c_str());
+
+  client->publish("device/res", "OK", false);
+
+  vTaskDelay(pdMS_TO_TICKS(500));
+
+  if (configViaBle && client != nullptr)
+  {
+    Serial.println("[INIT] Wifi da ket noi, dung BLE advertising truoc khi luu va restart.");
+    client->disconnect();
+    isWifiMode = true;
+  }
+
+  Serial.println("[INIT] Đang ghi cấu hình mới vào bộ nhớ Flash...");
+  config.set(JsonKeys::name, name);
+  config.set(JsonKeys::ssid, ssid);
+  config.set(JsonKeys::ssid_pass, ssid_pass);
+  config.set(JsonKeys::user, user);
+  config.set(JsonKeys::user_pass, user_pass);
+  config.set(JsonKeys::timezone, time_zone);
+  config.save();
+
+  Serial.println("[INIT] Cấu hình và lưu trữ thành công! Thiết bị sẽ khởi động lại sau 5 giây...");
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  ESP.restart();
+}
+
+void featureAddOrUpdateAutoTask(JsonDocument &doc)
+{
+  if (!doc.is<JsonObject>())
+    return;
+  JsonObject incomingTask = doc.as<JsonObject>();
+
+  if (!incomingTask.containsKey("endTime"))
+  {
+    incomingTask["endTime"] = "";
+  }
+
+  JsonDocument tempDoc;
+  JsonArray currentTasks = tempDoc.to<JsonArray>();
+
+  JsonArray oldTasks = autoConfig.get<JsonArray>(JsonKeys::AUTO_TASKS);
+
+  String incomingId = "";
+  if (incomingTask.containsKey(JsonKeys::TASK_ID))
+  {
+    incomingId = incomingTask[JsonKeys::TASK_ID].as<String>();
+  }
+  else
+  {
+    // incomingId = "task_" + String(rtc.now().unixtime()) + String(random(10, 99));
+  }
+  incomingTask[JsonKeys::TASK_ID] = incomingId;
+  bool isUpdated = false;
+  if (!oldTasks.isNull())
+  {
+    for (int i = 0; i < oldTasks.size(); i++)
+    {
+      String existingId = oldTasks[i][JsonKeys::TASK_ID].as<String>();
+      if (existingId == incomingId)
+      {
+        isUpdated = true;
+        continue;
+      }
+      currentTasks.add(oldTasks[i]);
+    }
+  }
+
+  currentTasks.add(incomingTask);
+
+  if (isUpdated)
+  {
+    Serial.printf("[SCHEDULER] Cập nhật Task ID: %s\n", incomingId.c_str());
+  }
+  else
+  {
+    Serial.printf("[SCHEDULER] Thêm mới Task ID: %s thành công\n", incomingId.c_str());
+  }
+  autoConfig.set(JsonKeys::AUTO_TASKS, currentTasks);
+  autoConfig.save();
+
+  JsonArray verifyArray = autoConfig.get<JsonArray>(JsonKeys::AUTO_TASKS);
+  Serial.printf("[DEBUG] Bộ nhớ autoConfig đang giữ: %d tasks\n", verifyArray.size());
+}
+
+bool validateAndSaveAlarm(JsonDocument &doc)
+{
+  if (!doc.is<JsonObject>())
+  {
+    Serial.println("[ALARM] Payload must be a JSON object");
+    return false;
+  }
+
+  const char *id = doc["id"] | "";
+  const char *startTime = doc["time"] | "";
+  const char *endTime = doc["endTime"] | "";
+  int startH = -1, startM = -1, endH = -1, endM = -1;
+
+  if (strlen(id) == 0 ||
+      sscanf(startTime, "%d:%d", &startH, &startM) != 2 ||
+      sscanf(endTime, "%d:%d", &endH, &endM) != 2 ||
+      startH < 0 || startH > 23 || startM < 0 || startM > 59 ||
+      endH < 0 || endH > 23 || endM < 0 || endM > 59 ||
+      (startH == endH && startM == endM))
+  {
+    Serial.println("[ALARM] Invalid id/time/endTime");
+    return false;
+  }
+
+  JsonArray actions = doc["actions"].as<JsonArray>();
+  bool hasAlarmAction = false;
+  for (JsonVariant action : actions)
+  {
+    if (strcmp(action["type"] | "", "alarm") == 0 &&
+        parseAlarmMode(action["value"] | "") != ALARM_OFF)
+    {
+      hasAlarmAction = true;
+      break;
+    }
+  }
+
+  int volume = doc["volume"] | 50;
+  if (!hasAlarmAction || volume < 0 || volume > 100)
+  {
+    Serial.println("[ALARM] Missing alarm action or volume is outside 0..100");
+    return false;
+  }
+
+  // days: [] means every day. RTC uses 0=Sunday ... 6=Saturday.
+  if (!doc.containsKey("days"))
+    doc["days"].to<JsonArray>();
+  if (!doc.containsKey("repeat"))
+    doc["repeat"] = false;
+
+  featureAddOrUpdateAutoTask(doc);
+  Serial.printf("[ALARM] Saved alarm [%s], %s - %s, volume %d%%\n",
+                id, startTime, endTime, volume);
+  return true;
+}
+
+bool featureDeleteAutoTask(const char *targetId)
+{
+  String target = targetId ? targetId : "";
+  target.trim();
+
+  if (target.isEmpty())
+  {
+    Serial.println("[SCHEDULER] Delete failed: ID is empty");
+    return false;
+  }
+
+  JsonArray oldTasks =
+      autoConfig.get<JsonArray>(JsonKeys::AUTO_TASKS);
+
+  Serial.printf(
+      "[SCHEDULER] DELETE target=[%s], task count=%u\n",
+      target.c_str(),
+      static_cast<unsigned int>(oldTasks.size()));
+
+  if (oldTasks.isNull() || oldTasks.size() == 0)
+  {
+    Serial.println(
+        "[SCHEDULER] Delete failed: AUTO_TASKS is empty");
+    return false;
+  }
+
+  JsonDocument resultDoc;
+  JsonArray remainingTasks = resultDoc.to<JsonArray>();
+
+  bool found = false;
+
+  for (JsonVariant task : oldTasks)
+  {
+    String currentId =
+        task[JsonKeys::TASK_ID] | "";
+
+    currentId.trim();
+
+    Serial.printf(
+        "[SCHEDULER] Compare stored=[%s], target=[%s]\n",
+        currentId.c_str(),
+        target.c_str());
+
+    if (currentId == target)
+    {
+      found = true;
+      Serial.printf(
+          "[SCHEDULER] Matched and removed: [%s]\n",
+          currentId.c_str());
+      continue;
+    }
+
+    remainingTasks.add(task);
+  }
+
+  if (!found)
+  {
+    Serial.printf(
+        "[SCHEDULER] Delete failed: ID not found [%s]\n",
+        target.c_str());
+    return false;
+  }
+
+  // Ghi mảng đã lọc trở lại ConfigStorage.
+  autoConfig.set(
+      JsonKeys::AUTO_TASKS,
+      remainingTasks);
+
+  autoConfig.save();
+
+  JsonArray verifyTasks =
+      autoConfig.get<JsonArray>(JsonKeys::AUTO_TASKS);
+
+  Serial.printf(
+      "[SCHEDULER] Deleted [%s], remaining=%u\n",
+      target.c_str(),
+      static_cast<unsigned int>(verifyTasks.size()));
+
+  return true;
+}
+
+String sanitizeLearnPart(const String &value)
+{
+  String safe = value;
+  safe.trim();
+  safe.toUpperCase();
+  safe.replace(" ", "_");
+  safe.replace("/", "_");
+  safe.replace("\\", "_");
+  safe.replace("#", "_");
+  safe.replace("+", "_");
+  safe.replace("|", "_");
+  return safe;
+}
+
+String makeLearnStorageKey(const String &deviceName, const String &key)
+{
+  return "learn_" + sanitizeLearnPart(deviceName) + "_" + sanitizeLearnPart(key);
+}
+
+bool saveLearnedIR(const String &deviceName, const String &key, const String &base64)
+{
+  if (deviceName.length() == 0 || key.length() == 0 || base64.length() == 0)
+    return false;
+
+  String storageKey = makeLearnStorageKey(deviceName, key);
+  storage.set(storageKey.c_str(), base64);
+  storage.save();
+
+  Serial.printf("[IR_LEARN] Saved key [%s] for device [%s], base64Len=%u\n",
+                key.c_str(), deviceName.c_str(), base64.length());
+  return true;
+}
+
+bool sendLearnedIR(const String &deviceName, const String &key)
+{
+  if (deviceName.length() == 0 || key.length() == 0)
+    return false;
+
+  String storageKey = makeLearnStorageKey(deviceName, key);
+  String base64 = storage.get<String>(storageKey.c_str(), "");
+
+  if (base64.length() == 0)
+  {
+    Serial.printf("[IR_LEARN] Missing learned IR for device [%s], key [%s]\n",
+                  deviceName.c_str(), key.c_str());
+    return false;
+  }
+
+  if (!irManager.setRawFromBase64(base64))
+  {
+    Serial.printf("[IR_LEARN] Invalid learned IR data for device [%s], key [%s]\n",
+                  deviceName.c_str(), key.c_str());
+    return false;
+  }
+
+  irManager.send();
+  xSemaphoreGive(irMutex);
+  Serial.printf("[IR_LEARN] Sent learned IR for device [%s], key [%s]\n",
+                deviceName.c_str(), key.c_str());
+  return true;
+}
+
+void featureIR(JsonDocument &mqttDoc)
+{
+  if (!mqttDoc.containsKey("type") || !mqttDoc.containsKey("deviceName"))
+  {
+    Serial.println("[IR_FEATURE] Error: Missing 'type' or 'deviceName' key!");
+    return;
+  }
+
+  String type = mqttDoc["type"].as<String>();
+  String deviceName = mqttDoc["deviceName"].as<String>();
+  if (type == "START_LEARNING" || type == "START_LEARNIN")
+  {
+    isRemoteLearing = true;
+    Serial.println("[IR_FEATURE] Learning mode ON");
+    return;
+  }
+  if (type == "STOP_LEARNING" || type == "STOP_LEARNIN")
+  {
+    isRemoteLearing = false;
+    Serial.println("[IR_FEATURE] Learning mode OFF");
+    return;
+  }
+  if (type == "LEARNING_REMOTE")
+  {
+    String command = mqttDoc["action"]["command"] | "";
+    command.toUpperCase();
+    String key = mqttDoc["action"]["key"] | "";
+    if (key.length() == 0)
+      key = mqttDoc["action"]["value"] | "";
+    String actionName = mqttDoc["action"]["name"] | key;
+
+    if (command == "LEARN")
+    {
+      if (key.length() == 0)
+      {
+        Serial.println("[IR_FEATURE] LEARN ignored: missing action.key");
+        return;
+      }
+
+      isRemoteLearing = true;
+      strlcpy(learningDeviceName, deviceName.c_str(), sizeof(learningDeviceName));
+      strlcpy(learningBrand, mqttDoc["brand"] | "", sizeof(learningBrand));
+      strlcpy(learningKey, key.c_str(), sizeof(learningKey));
+      strlcpy(learningName, actionName.c_str(), sizeof(learningName));
+
+      Serial.printf("[IR_FEATURE] Learning remote device [%s], brand [%s], key [%s], name [%s]. Waiting for IR input...\n",
+                    learningDeviceName,
+                    learningBrand,
+                    learningKey,
+                    learningName);
+      return;
+    }
+
+    if (command == "STOP_LEARN" || command == "STOP")
+    {
+      isRemoteLearing = false;
+      learningDeviceName[0] = '\0';
+      learningBrand[0] = '\0';
+      learningKey[0] = '\0';
+      learningName[0] = '\0';
+      Serial.println("[IR_FEATURE] Learning remote stopped");
+      return;
+    }
+
+    String base64 = mqttDoc["action"]["dataBase64"] | "";
+    if (base64.length() == 0)
+      base64 = mqttDoc["action"]["data_base64"] | "";
+
+    if (command == "SEND" && irManager.setRawFromBase64(base64))
+    {
+      irManager.send();
+      Serial.println("[IR_FEATURE] Learning remote IR sent");
+    }
+    else if ((command == "SEND" || command == "PLAY" || command.length() == 0) && key.length() > 0)
+    {
+      sendLearnedIR(deviceName, key);
+    }
+    else if (command == "SEND")
+    {
+      Serial.println("[IR_FEATURE] Learning remote SEND ignored: empty/invalid dataBase64");
+    }
+    xSemaphoreGive(irMutex);
+    return;
+  }
+
+  if (type == "AC")
+  {
+    if (!mqttDoc.containsKey("action"))
+    {
+      Serial.println("[IR_FEATURE] AC Error: Missing 'action' structure");
+      return;
+    }
+
+    int savedProtoId = storage.get(deviceName.c_str(), -1);
+
+    if (savedProtoId == -1)
+    {
+      Serial.printf("[IR_FEATURE] AC Error: Device [%s] has not been configured yet (Run CONFIRM first)!\n", deviceName.c_str());
+      return;
+    }
+
+    decode_type_t targetProtocol = (decode_type_t)savedProtoId;
+
+    bool power = (mqttDoc["action"]["power"].as<String>() == "ON");
+    int temp = mqttDoc["action"]["temp"] | 24;
+    bool isSleep = mqttDoc["action"]["sleep"] | false;
+    uint8_t mode = mqttDoc["action"]["mode"] | 1;
+    uint8_t fan = mqttDoc["action"]["fan"] | 0;
+    uint8_t swing = mqttDoc["action"]["swing"] | 0;
+
+    Serial.printf("[IR_FEATURE] CONTROL AC -> Device: %s | Protocol ID: %d (%s)\n",
+                  deviceName.c_str(), savedProtoId, typeToString(targetProtocol).c_str());
+    Serial.printf(
+        "[IR_FEATURE] Raw payload -> Power: %s | Temp: %d | "
+        "Mode: %u | Fan: %u | Swing: %u | Sleep: %s\n",
+        power ? "ON" : "OFF",
+        temp,
+        mode,
+        fan,
+        swing,
+        isSleep ? "ON" : "OFF");
+
+    if (isSleep)
+    {
+      uint8_t wakeHour, wakeMinute;
+      const char *wakeTimeStr = mqttDoc["action"]["wakeTime"] | "";
+
+      if (!parseTimeString(wakeTimeStr, wakeHour, wakeMinute))
+      {
+        // Fallback tương thích ngược với field rời wakeHour/wakeMinute
+        wakeHour = mqttDoc["action"]["wakeHour"] | 6;
+        wakeMinute = mqttDoc["action"]["wakeMinute"] | 0;
+      }
+
+      const bool started = startSmartSleep(
+          targetProtocol,
+          power ? "ON" : "OFF",
+          static_cast<float>(temp),
+          irManager.toCommonFan(fan),
+          irManager.toCommonSwing(swing),
+          irManager.toCommonMode(mode),
+          wakeHour,
+          wakeMinute);
+
+      if (started)
+      {
+        buzzerSystem.setAlarmMode(ALARM_SHORT_BEEP);
+
+        Serial.printf(
+            "[IR_FEATURE] Smart Sleep enabled, wake=%02u:%02u\n",
+            wakeHour,
+            wakeMinute);
+      }
+      else
+      {
+        Serial.println("[IR_FEATURE] Cannot enable Smart Sleep");
+      }
+    }
+    else
+    {
+      /*
+       * Lệnh điều khiển AC thông thường phải hủy Smart Sleep trước,
+       * tránh task Sleep ghi đè lệnh của người dùng sau đó.
+       */
+      if (SmartSleep::isActive())
+      {
+        stopSmartSleep();
+      }
+
+      const bool sendSuccess = irManager.setACState(
+          targetProtocol,
+          power,
+          temp,
+          irManager.toCommonMode(mode),
+          irManager.toCommonFan(fan),
+          irManager.toCommonSwing(swing));
+      xSemaphoreGive(irMutex);
+      if (sendSuccess)
+      {
+        currentAcState.protocol = targetProtocol;
+        currentAcState.power = power;
+        currentAcState.degrees = temp;
+        currentAcState.celsius = true;
+        currentAcState.mode = irManager.toCommonMode(mode);
+        currentAcState.fanspeed = irManager.toCommonFan(fan);
+        currentAcState.swingv = irManager.toCommonSwing(swing);
+        currentAcState.swingh = stdAc::swingh_t::kMiddle;
+
+        Serial.println(
+            " -> [SUCCESS] IR Signal sent via dedicated AC Class.");
+      }
+      else
+      {
+        Serial.printf(
+            " -> [FAILED] Protocol ID %d failed inside setACState!\n",
+            savedProtoId);
+      }
+    }
+  }
+  else if (type == "SCAN")
+  {
+    if (!mqttDoc.containsKey("brand") || !mqttDoc.containsKey("action"))
+    {
+      Serial.println("[IR_FEATURE] SCAN Error: Missing 'brand' or 'action' structure");
+      return;
+    }
+
+    String targetBrand = mqttDoc["brand"].as<String>();
+    targetBrand.toUpperCase();
+
+    bool power = (mqttDoc["action"]["power"].as<String>() == "ON");
+    uint8_t temp = mqttDoc["action"]["temp"] | 24;
+    uint8_t mode = mqttDoc["action"]["mode"] | 1;
+
+    // Tìm hãng trong database toàn cục
+    bool brandFound = false;
+    for (const auto &brandItem : brandDatabase)
+    {
+      if (brandItem.name == targetBrand)
+      {
+        brandFound = true;
+        if (strcmp(lastScannedBrand, targetBrand.c_str()) != 0)
+        {
+          strlcpy(lastScannedBrand, targetBrand.c_str(), sizeof(lastScannedBrand));
+          currentProtocolIndex = 0; // Bắt đầu từ protocol đầu tiên của hãng
+        }
+        else
+        {
+          currentProtocolIndex++; // Tăng index lên để thử protocol tiếp theo
+
+          if (currentProtocolIndex >= brandItem.protocols.size())
+          {
+            currentProtocolIndex = 0;
+            Serial.println("[IR_FEATURE] Loop back to the first protocol of this brand.");
+          }
+        }
+
+        decode_type_t currentProto = brandItem.protocols[currentProtocolIndex];
+
+        lastScannedProtocol = currentProto;
+
+        Serial.printf("[IR_FEATURE] SCANNING -> Brand: %s | Testing Protocol Index: %d/%d (Enum ID: %d) - %s\n",
+                      targetBrand.c_str(),
+                      currentProtocolIndex,
+                      brandItem.protocols.size() - 1,
+                      (int)currentProto,
+                      typeToString(currentProto).c_str());
+        // buzzerSystem.setAlarmMode(ALARM_SHORT_BEEP);
+
+        const bool sendSuccess = irManager.setACState(
+            currentProto,
+            power,
+            temp,
+            irManager.toCommonMode(mode),
+            irManager.toCommonFan(1),
+            irManager.toCommonSwing(1));
+        if (sendSuccess)
+        {
+          Serial.println(" -> [SUCCESS] AC Class fired command successfully.");
+        }
+        else
+        {
+          Serial.printf(" -> [FAILED] Class for protocol ID %d not implemented in setACState!\n", (int)currentProto);
+        }
+        break;
+      }
+    }
+
+    if (!brandFound)
+    {
+      Serial.printf("[IR_FEATURE] SCAN Error: Brand '%s' is not supported!\n", targetBrand.c_str());
+      lastScannedBrand[0] = '\0';
+      currentProtocolIndex = -1;
+    }
+  }
+  else if (type == "CONFIRM")
+  {
+    if (lastScannedProtocol == decode_type_t::UNKNOWN)
+    {
+      Serial.println("[IR_FEATURE] CONFIRM Failed: No active or valid scan session found.");
+      return;
+    }
+
+    int protoIdToSave = (int)lastScannedProtocol;
+    storage.set(deviceName.c_str(), protoIdToSave);
+    storage.save();
+
+    Serial.printf("[IR_FEATURE] CONFIRMED -> Device [%s] bound to Protocol Enum ID [%d] (%s)\n",
+                  deviceName.c_str(), protoIdToSave, typeToString(lastScannedProtocol).c_str());
+    // buzzerSystem.setAlarmMode(ALARM_LONG_BEEP);
+    lastScannedProtocol = decode_type_t::UNKNOWN;
+  }
+  else if (type == "DELETE")
+  {
+    storage.set(deviceName.c_str(), -1);
+    storage.save();
+
+    Serial.printf("[IR_FEATURE] DELETED -> Cleared active protocol configurations for device [%s]\n", deviceName.c_str());
+  }
+}
+
+void mqttCallback(const char *topic, const char *payload)
+{
+  Serial.println("\n==========");
+  Serial.print("TOPIC: ");
+  Serial.println(topic ? topic : "");
+  Serial.print("PAYLOAD: ");
+  Serial.println(payload ? payload : "");
+
+  if (topic && strcmp(topic, "device/init") == 0)
+  {
+    InitPayload data;
+    memset(&data, 0, sizeof(data));
+    strncpy(data.json, payload ? payload : "", sizeof(data.json) - 1);
+
+    if (xQueueSend(initQueue, &data, 0) == pdTRUE)
+    {
+      Serial.println("[INIT] Da dua vao queue xu ly");
+    }
+    else
+    {
+      Serial.println("[INIT] Queue day");
+    }
+
+    return;
+  }
+
+  if (mqttQueue == NULL)
+  {
+    Serial.println("[MQTT_QUEUE] Queue chua san sang");
+    return;
+  }
+
+  MQTTMessage message;
+  memset(&message, 0, sizeof(message));
+  strncpy(message.topic, topic ? topic : "", sizeof(message.topic) - 1);
+  strncpy(message.payload, payload ? payload : "", sizeof(message.payload) - 1);
+
+  if (xQueueSend(mqttQueue, &message, 0) == pdTRUE)
+    Serial.println("[MQTT_QUEUE] Da dua message vao queue xu ly");
+  else
+    Serial.println("[MQTT_QUEUE] Queue day, bo qua message");
+
+  return;
+}
+
+void executeTaskAction(JsonVariant task)
+{
+  const char *deviceName = task["deviceName"] | "unknown";
+
+  JsonArray actions = task["actions"].as<JsonArray>();
+  if (actions.isNull() || actions.size() == 0)
+    return;
+
+  for (JsonVariant act : actions)
+  {
+    const char *type = act["type"] | "";
+    const char *value = act["value"] | "";
+
+    if (strcmp(type, "autoTemp") == 0 || strcmp(type, "power") == 0)
+    {
+      int savedProtoId = storage.get(deviceName, -1);
+      if (savedProtoId == -1)
+      {
+        Serial.printf("[SCHEDULER] AC Error: Thiết bị [%s] chưa cấu hình IR Protocol!\n", deviceName);
+        return;
+      }
+      decode_type_t targetProtocol = (decode_type_t)savedProtoId;
+
+      bool powerState = act["power"] | false;
+      uint8_t targetTemp = act["temp"] | 24;
+      uint8_t modeState = act["mode"] | 1;
+      uint8_t fan = act["fan"] | 1;
+      uint8_t swing = act["swing"] | 1;
+
+      if (strcmp(value, "OFF") == 0)
+      {
+        powerState = false;
+        Serial.printf("[SCHEDULER] Lệnh yêu cầu TẮT thiết bị %s\n", deviceName);
+      }
+      else
+      {
+        powerState = true;
+
+        if (strcmp(type, "autoTemp") == 0 && act.containsKey("temp"))
+        {
+          float setTemp = act["temp"].as<float>();
+          float currentRoomTemp = ntcTemp.getTemperature();
+
+          uint8_t currentACSettingTemp = (uint8_t)currentRoomTemp;
+
+          Serial.printf("[SMART LOGIC] Quét: Phòng: %.1f °C | Mục tiêu: %.1f °C | Khởi tạo AC: %d °C\n",
+                        currentRoomTemp, setTemp, currentACSettingTemp);
+
+          float tempDifference = currentRoomTemp - setTemp;
+          if (tempDifference > (DELTA_TEMP))
+          {
+            if (currentACSettingTemp > 16)
+            {
+              currentACSettingTemp = (uint8_t)(setTemp - TEMP_STEP);
+              if (currentACSettingTemp < 16)
+                currentACSettingTemp = 16;
+
+              Serial.printf("[SMART AC] Phòng nóng! Ép nhiệt độ remote xuống: %d °C để làm mát nhanh\n", currentACSettingTemp);
+            }
+          }
+          else if (tempDifference < (DELTA_TEMP * -1))
+          {
+            if (currentACSettingTemp < 30)
+            {
+              currentACSettingTemp = (uint8_t)(setTemp + TEMP_STEP);
+              if (currentACSettingTemp > 30)
+                currentACSettingTemp = 30;
+
+              Serial.printf("[SMART AC] Phòng lạnh! Đẩy nhiệt độ remote lên: %d °C\n", currentACSettingTemp);
+            }
+          }
+          else
+          {
+            currentACSettingTemp = (uint8_t)setTemp;
+            Serial.printf("[SMART AC]  Đạt trạng thái cân bằng! Đồng bộ remote về mốc: %d °C\n", currentACSettingTemp);
+          }
+
+          targetTemp = currentACSettingTemp;
+        }
+      }
+      Serial.printf("[SCHEDULER] BẮN IR AC [%s] -> [Power: %s, Temp: %d °C, Mode: %d]\n",
+                    deviceName, powerState ? "ON" : "OFF", targetTemp, modeState);
+
+      // bool sendSuccess = irManager.setACState(targetProtocol, powerState, targetTemp, modeState);
+      const bool sendSuccess = irManager.setACState(
+          targetProtocol,
+          powerState,
+          targetTemp,
+          irManager.toCommonMode(modeState),
+          irManager.toCommonFan(fan),
+          irManager.toCommonSwing(swing));
+      // buzzerSystem.setAlarmMode(parseAlarmMode(JsonKeys::SHORT_BEEP));
+      if (!sendSuccess)
+      {
+        Serial.printf(" -> [FAILED] Bắn hồng ngoại thất bại cho thiết bị %s\n", deviceName);
+      }
+    }
+    else if (strcmp(type, "alarm") == 0)
+    {
+      int volume = task["volume"] | 50;
+      featureAlarm(value, volume);
+    }
+    else if (strcmp(type, "LEARNING_REMOTE") == 0 || strcmp(type, "learning_remote") == 0)
+    {
+      String key = act["key"] | "";
+      if (key.length() == 0)
+        key = act["value"] | "";
+
+      String actionDeviceName = act["deviceName"] | "";
+      if (actionDeviceName.length() == 0)
+        actionDeviceName = deviceName;
+
+      if (key.length() == 0)
+      {
+        Serial.printf("[SCHEDULER] Learning remote task [%s] missing key/value\n", deviceName);
+        continue;
+      }
+
+      bool sent = sendLearnedIR(actionDeviceName, key);
+      Serial.printf("[SCHEDULER] Learning remote [%s] key [%s] -> %s\n",
+                    actionDeviceName.c_str(),
+                    key.c_str(),
+                    sent ? "OK" : "FAILED");
+    }
+  }
+}
+
+void subscribeAllFeatures(MQTT_CILENT *targetClient)
+{
+  if (targetClient == NULL)
+    return;
+
+  int mainCount = sizeof(main_feature) / sizeof(main_feature[0]);
+  int subCount = sizeof(sub_feature) / sizeof(sub_feature[0]);
+
+  Serial.println("[MQTT] Đang tự động tạo cấu trúc topic lồng nhau...");
+
+  for (int i = 0; i < mainCount; i++)
+  {
+
+    String mainTopic = getDeviceTopicBase() + String(main_feature[i]);
+    String legacyMainTopic = getLegacyDeviceTopicBase() + String(main_feature[i]);
+    targetClient->subscribe(mainTopic.c_str());
+    targetClient->subscribe(legacyMainTopic.c_str());
+    Serial.println("-> Subbed Main: " + mainTopic);
+    Serial.println("-> Subbed Legacy: " + legacyMainTopic);
+
+    for (int j = 0; j < subCount; j++)
+    {
+      String combinedTopic = mainTopic + String(sub_feature[j]);
+      String legacyCombinedTopic = legacyMainTopic + String(sub_feature[j]);
+
+      targetClient->subscribe(combinedTopic.c_str());
+      targetClient->subscribe(legacyCombinedTopic.c_str());
+      Serial.println("   -> Subbed Combined: " + combinedTopic);
+      Serial.println("   -> Subbed Legacy Combined: " + legacyCombinedTopic);
+    }
+  }
+  Serial.println("[MQTT] Hoàn thành kết nối ma trận Topic!");
+}
+
+// TASK
+
+void taskSleep(void *pvParameters)
+{
+  Serial.println("[SMART_SLEEP] Task ready");
+
+  for (;;)
+  {
+    while (!SmartSleep::isActive())
+    {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    }
+
+    Serial.println("[SMART_SLEEP] Processing started");
+
+    while (SmartSleep::isActive())
+    {
+      const float currentRoomTemp = ntcTemp.getTemperature();
+      const time_t nowEpoch = time(nullptr);
+
+      if (!std::isfinite(currentRoomTemp))
+      {
+        Serial.println("[SMART_SLEEP] Invalid room temperature");
+      }
+      else if (nowEpoch < 100000)
+      {
+        Serial.println("[SMART_SLEEP] Time is not synchronized");
+      }
+      else
+      {
+        SmartSleep::Result result = SmartSleep::update(
+            currentRoomTemp,
+            nowEpoch,
+            millis());
+
+        Serial.printf(
+            "[SMART_SLEEP] active=%d finished=%d room=%.1f "
+            "target=%.1f elapsed=%lu remaining=%lu progress=%.2f%% sendIr=%d\n",
+            result.active,
+            result.finished,
+            result.roomTemperatureC,
+            result.targetSetpointC,
+            static_cast<unsigned long>(result.elapsedMinutes),
+            static_cast<unsigned long>(result.remainingMinutes),
+            result.progress * 100.0f,
+            result.shouldSendIr);
+        if (result.finished)
+        {
+          Serial.println("[SMART_SLEEP] Schedule finished");
+
+          SmartSleep::stop();
+          smartSleepProtocol = decode_type_t::UNKNOWN;
+
+          break;
+        }
+
+        if (result.shouldSendIr)
+        {
+          if (smartSleepProtocol == decode_type_t::UNKNOWN)
+          {
+            Serial.println("[SMART_SLEEP] Protocol is unknown");
+            SmartSleep::stop();
+            break;
+          }
+          const uint8_t targetTemperature =
+              static_cast<uint8_t>(
+                  lroundf(result.acState.degrees));
+
+          const bool sent = irManager.setACState( // trạng thái hiện tại khi nhận sleep
+              smartSleepProtocol,
+              result.acState.power,
+              targetTemperature,
+              currentAcState.mode,
+              currentAcState.fanspeed,
+              currentAcState.swingv);
+
+          xSemaphoreGive(irMutex);
+          if (sent)
+          {
+            currentAcState = result.acState;
+
+            // Tránh IR receiver đọc lại chính tín hiệu vừa phát.
+            irRxMutedUntilMs = millis() + 500;
+          }
+
+          Serial.printf(
+              "[SMART_SLEEP] IR=%s protocol=%s room=%.1fC "
+              "target=%.1fC elapsed=%lu remaining=%lu progress=%.1f%%\n",
+              sent ? "sent" : "failed",
+              typeToString(smartSleepProtocol).c_str(),
+              result.roomTemperatureC,
+              result.targetSetpointC,
+              static_cast<unsigned long>(result.elapsedMinutes),
+              static_cast<unsigned long>(result.remainingMinutes),
+              result.progress * 100.0f);
+        }
+      }
+
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(30000UL)); // 30s
+    }
+
+    Serial.println("[SMART_SLEEP] Processing stopped");
+  }
+}
+
+void taskProcessMqttMessages(void *pvParameters)
+{
+  MQTTMessage message;
+  uint32_t lastMemLogMs = 0;
+
+  for (;;)
+  {
+    if (xQueueReceive(mqttQueue, &message, portMAX_DELAY) != pdTRUE)
+      continue;
+
+    logTaskMemory("MQTT_QUEUE", lastMemLogMs);
+    const char *topic = message.topic;
+    const char *payload = message.payload;
+    String topicStr = getDeviceTopicBase();
+    String legacyTopicStr = getLegacyDeviceTopicBase();
+
+    if (topicEquals(topic, topicStr, "/pair/set") || topicEquals(topic, legacyTopicStr, "/pair/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      { featureIR(doc); });
+      continue;
+    }
+
+    if (topicEquals(topic, topicStr, "/control/set") || topicEquals(topic, legacyTopicStr, "/control/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      {
+                        serializeJson(doc, Serial);
+                        Serial.println();
+                        featureIR(doc); });
+      continue;
+    }
+
+    if (strcmp(topic, "device/init") == 0 ||
+        topicEquals(topic, topicStr, "/init") ||
+        topicEquals(topic, topicStr, "/init/set") ||
+        topicEquals(topic, legacyTopicStr, "/init") ||
+        topicEquals(topic, legacyTopicStr, "/init/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      {
+                        String initName = getInitDeviceName(doc);
+                        const char *ssid = doc["ssid"] | "";
+                        const char *ssid_pass = doc["ssid_pass"] | "";
+                        const char *user = doc["user"] | "";
+                        const char *user_pass = doc["user_pass"] | "";
+                        const char *time_zone = doc[JsonKeys::timezone] | (doc["time_zone"] | "Asia/Ho_Chi_Minh");
+
+                        Serial.println("Dang cap nhat trang thai INIT...");
+                        featureInitConfig(initName.c_str(), ssid, ssid_pass, user, user_pass, time_zone); });
+      continue;
+    }
+
+    if (topicEquals(topic, topicStr, "/led/set") || topicEquals(topic, legacyTopicStr, "/led/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      {
+                        const char *mode = doc["mode"] | "";
+                        const char *hexColor = doc["color"] | "";
+                        int speed = doc["speed"] | -1;
+                        int brightness = doc["brightness"] | -1;
+
+                        Serial.println("Dang cap nhat trang thai LED...");
+                        featureChangeLedMode(mode, speed, brightness, hexColor); });
+      continue;
+    }
+
+    if (topicEquals(topic, topicStr, "/alarm/set") || topicEquals(topic, legacyTopicStr, "/alarm/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      {
+                        if (doc.containsKey("time") || doc.containsKey("endTime"))
+                        {
+                          validateAndSaveAlarm(doc);
+                        }
+                        else
+                        {
+                          const char *mode = doc["mode"] | "OFF";
+                          int volume = doc["volume"] | (doc["volumn"] | -1);
+                          Serial.println("Dang cap nhat trang thai ALARM...");
+                          featureAlarm(mode, volume);
+                        } });
+      continue;
+    }
+
+    if (topicEquals(topic, topicStr, "/auto/set") || topicEquals(topic, legacyTopicStr, "/auto/set"))
+    {
+      parseJsonHelper(payload, [](JsonDocument &doc)
+                      { featureAddOrUpdateAutoTask(doc); });
+      continue;
+    }
+
+    if (topicEquals(topic, topicStr, "/auto/delete") || topicEquals(topic, legacyTopicStr, "/auto/delete"))
+    {
+      parseJsonHelper(payload, [&](JsonDocument &doc)
+                      {
+                        const char *targetId = doc["id"] | payload;
+                        featureDeleteAutoTask(targetId); });
+      continue;
+    }
+
+    Serial.print("[MQTT_QUEUE] Khong co handler cho topic: ");
+    Serial.println(topic);
+  }
+}
+
+void taskNotification(void *pvParameters)
+{
+  NotificationMessage message{};
+
+  for (;;)
+  {
+    if (xQueueReceive(notificationQueue, &message, portMAX_DELAY) == pdTRUE)
+    {
+      bool sent = notificationForUserApp(
+          message.user,
+          message.pass,
+          message.title,
+          message.body);
+
+      if (sent)
+      {
+        if (message.confirmsPreOta)
+          deviceApi.confirmPreOtaNotification(message.firmwareVersion);
+
+        Serial.println("[NOTIFICATION] Gửi thông báo thành công");
+      }
+      else
+      {
+        Serial.println("[NOTIFICATION] Gửi thông báo thất bại");
+      }
+    }
+  }
+}
+
+void taskRoomTemp(void *pvParameters)
+{
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = pdMS_TO_TICKS(30000);
+  uint32_t lastMemLogMs = 0;
+  xLastWakeTime = xTaskGetTickCount();
+  for (;;)
+  {
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    logTaskMemory("taskRoomTemp", lastMemLogMs);
+    float temperature = ntcTemp.getTemperature();
+    // char rtcDateTime[25];
+    // rtc.getDateTimeString(rtcDateTime, sizeof(rtcDateTime));
+    // Serial.print("[TASK RTC] ");
+    // Serial.println(rtcDateTime);
+
+    // Serial.print("[TASK NTC] Nhiệt độ lấy mẫu: ");
+    // Serial.print(temperature, 1);
+    // Serial.println(" °C");
+    char payload[24];
+    snprintf(payload, sizeof(payload), "{\"temp\":%.1f}", temperature);
+
+    char topic[160];
+    if (client && client->isConnected() && buildDeviceTopic(topic, sizeof(topic), "/sensor/info"))
+      client->publish(topic, payload, false);
+
+    if (temperature > 35 && notificationQueue)
+    {
+      NotificationMessage msg{};
+      strlcpy(msg.user,
+              config.get<String>(JsonKeys::user, "").c_str(),
+              sizeof(msg.user));
+      strlcpy(msg.pass,
+              config.get<String>(JsonKeys::user_pass, "").c_str(),
+              sizeof(msg.pass));
+      strlcpy(msg.title,
+              "Smart IR",
+              sizeof(msg.title));
+      snprintf(msg.body, sizeof(msg.body),
+               "Nhiệt độ phòng %s đang quá cao (%.0f°C)",
+               config.get<String>(JsonKeys::name, "").c_str(), temperature);
+
+      xQueueSend(notificationQueue, &msg, 0);
+    }
+    else if (temperature < 20 && notificationQueue)
+    {
+      NotificationMessage msg{};
+      strlcpy(msg.user,
+              config.get<String>(JsonKeys::user, "").c_str(),
+              sizeof(msg.user));
+      strlcpy(msg.pass,
+              config.get<String>(JsonKeys::user_pass, "").c_str(),
+              sizeof(msg.pass));
+      strlcpy(msg.title,
+              "Smart IR",
+              sizeof(msg.title));
+      snprintf(msg.body, sizeof(msg.body),
+               "Nhiệt độ phòng %s đang quá thấp (%.0f°C)",
+               config.get<String>(JsonKeys::name, "").c_str(), temperature);
+
+      xQueueSend(notificationQueue, &msg, 0);
+    }
+  }
+}
+
+void taskInitConfig(void *pv)
+{
+  // Đặt payload ở vùng static/BSS thay vì stack của task (tiết kiệm 512 byte stack).
+  static InitPayload data{};
+
+  for (;;)
+  {
+    if (ulTaskNotifyTake(pdTRUE, 0))
+    {
+      Serial.println("taskInitConfig exit");
+      break;
+    }
+
+    if (xQueueReceive(initQueue, &data, pdMS_TO_TICKS(500)) != pdTRUE)
+      continue;
+
+    Serial.printf(
+        "[MEM] INIT_CONFIG before parse heap=%u largest=%u stackFree=%u\n",
+        ESP.getFreeHeap(),
+        ESP.getMaxAllocHeap(),
+        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+
+    // Parse trực tiếp, không đi qua std::function/lambda để giảm độ sâu stack.
+    JsonDocument doc;
+    const DeserializationError error = deserializeJson(doc, data.json);
+    if (error)
+    {
+      Serial.printf("[INIT] JSON parse failed: %s\n", error.c_str());
+      continue;
+    }
+
+    // Sao chép ra buffer cố định để dữ liệu không phụ thuộc vòng đời JsonDocument
+    // và tránh tạo nhiều String tạm trong đường gọi sâu Wi-Fi/BLE/Flash.
+    char initName[64]{};
+    char ssid[33]{};
+    char ssidPass[65]{};
+    char user[128]{};
+    char userPass[128]{};
+    char timeZone[64]{};
+
+    const String resolvedName = getInitDeviceName(doc);
+    strlcpy(initName, resolvedName.c_str(), sizeof(initName));
+    strlcpy(ssid, doc["ssid"] | "", sizeof(ssid));
+    strlcpy(ssidPass, doc["ssid_pass"] | "", sizeof(ssidPass));
+    strlcpy(user, doc["user"] | "", sizeof(user));
+    strlcpy(userPass, doc["user_pass"] | "", sizeof(userPass));
+    strlcpy(timeZone, doc["time_zone"] | "Asia/Ho_Chi_Minh", sizeof(timeZone));
+
+    doc.clear();
+
+    Serial.printf(
+        "[MEM] INIT_CONFIG before apply heap=%u largest=%u stackFree=%u\n",
+        ESP.getFreeHeap(),
+        ESP.getMaxAllocHeap(),
+        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+    Serial.println("Đang cập nhật trạng thái INIT...");
+
+    featureInitConfig(initName, ssid, ssidPass, user, userPass, timeZone);
+  }
+
+  xTaskInit = NULL;
+  vTaskDelete(NULL);
+}
+
+void taskHeartbeat(void *pvParameters)
+{
+  deviceApi.begin();
+  deviceApi.setUpdateStateCallback(setUpdateLoadingLed);
+  deviceApi.setFirmwareUpdateCallback(notifyFirmwareUpdate);
+
+  String name = config.get<String>(JsonKeys::name, DEVICE_NAME);
+  uint32_t lastMemLogMs = 0;
+
+  if (name.length() == 0)
+  {
+    Serial.println("[Heartbeat] Không tìm thấy tên thiết bị trong cấu hình. Hủy task!");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  uint32_t lastBackendHeartbeat = 0;
+  bool startupHeartbeatSent = false;
+
+  while (1)
+  {
+    logTaskMemory("taskHeartbeat", lastMemLogMs);
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      uint32_t now = millis();
+      if (!startupHeartbeatSent || now - lastBackendHeartbeat >= DEVICE_HEARTBEAT_INTERVAL_MS)
+      {
+        startupHeartbeatSent = true;
+        lastBackendHeartbeat = now;
+        if (xSemaphoreTake(networkMutex, pdMS_TO_TICKS(5000)) == pdTRUE)
+        {
+          // OTA report/notification luôn được ưu tiên trước MQTT publish và
+          // heartbeat để giữ TLS reserve nguyên vẹn sau reboot.
+          const bool handledPendingOta = deviceApi.processPendingOtaOnBoot();
+
+          if (!handledPendingOta)
+            deviceApi.heartbeatAndUpdate();
+
+          xSemaphoreGive(networkMutex);
+
+          if (handledPendingOta)
+          {
+            vTaskDelay(pdMS_TO_TICKS(30000));
+            continue;
+          }
+        }
+        else
+        {
+          Serial.println("[Heartbeat] Bo qua: dang co ket noi TLS khac chiem dung");
+        }
+      }
+    }
+
+    // Chỉ publish MQTT sau khi không còn stage OTA cần xử lý.
+    if (client && client->isConnected())
+    {
+      char topic[160];
+      if (buildDeviceTopic(topic, sizeof(topic), "/status"))
+        client->publish(topic, "online", true);
+    }
+
+    vTaskDelay(15000 / portTICK_RATE_MS);
+  }
+}
+
+void taskWatchdog(void *pvParameters)
+{
+  for (;;)
+  {
+    wd.resetWatchDog();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskIR(void *pvParameters)
+{
+  uint32_t lastMemLogMs = 0;
+
+  while (1)
+  {
+    logTaskMemory("taskIR", lastMemLogMs);
+
+    if (isIrReceiverMuted())
+    {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+
+    uint16_t *receivedRaw = nullptr;
+    uint16_t receivedLength = 0;
+
+    if (irManager.readRaw(receivedRaw, receivedLength))
+    {
+      IRMessage msg = {
+          receivedRaw,
+          receivedLength};
+
+      if (xQueueSend(irQueue, &msg, portMAX_DELAY) != pdPASS)
+      {
+        delete[] receivedRaw;
+        receivedRaw = nullptr;
+      }
+      else
+      {
+        receivedRaw = nullptr;
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+void taskProcessIRLogic(void *pvParameters)
+{
+  IRMessage incomingMsg;
+  uint32_t lastMemLogMs = 0;
+
+  Serial.println("[TASK_LOGIC] Task xử lý logic IR đã sẵn sàng.");
+
+  while (1)
+  {
+    if (xQueueReceive(irQueue, &incomingMsg, portMAX_DELAY) == pdPASS)
+    {
+      logTaskMemory("Task_IR_Logic", lastMemLogMs);
+      if (isRemoteLearing)
+      {
+        Serial.println("[TASK_LOGIC] Chế độ học lệnh: Mã hóa dữ liệu...");
+        String base64Encoded = irManager.convertRawToBase64(incomingMsg.rawData, incomingMsg.length);
+        bool saved = saveLearnedIR(String(learningDeviceName), String(learningKey), base64Encoded);
+        String responsePayload = "{";
+        responsePayload += "\"type\":\"LEARNING_REMOTE\",";
+        responsePayload += "\"status\":\"";
+        responsePayload += saved ? "SAVED" : "FAILED";
+        responsePayload += "\",";
+        responsePayload += String("\"deviceName\":\"") + learningDeviceName + "\",";
+        responsePayload += String("\"brand\":\"") + learningBrand + "\",";
+        responsePayload += "\"action\":{";
+        responsePayload += "\"command\":\"LEARN\",";
+        responsePayload += String("\"key\":\"") + learningKey + "\",";
+        responsePayload += String("\"name\":\"") + learningName + "\"";
+        responsePayload += "}}";
+        String responseTopic = getDeviceTopicBase() + "/control/set";
+        client->publish(responseTopic.c_str(), responsePayload.c_str(), false);
+        isRemoteLearing = false;
+        learningDeviceName[0] = '\0';
+        learningBrand[0] = '\0';
+        learningKey[0] = '\0';
+        learningName[0] = '\0';
+      }
+      else
+      {
+        Serial.printf("[TASK_LOGIC] Forward raw IR length=%u\n", incomingMsg.length);
+        irManager.setRawData(incomingMsg.rawData, incomingMsg.length);
+        irManager.send();
+        xSemaphoreGive(irMutex);
+      }
+
+      if (incomingMsg.rawData != nullptr)
+      {
+        delete[] incomingMsg.rawData;
+        incomingMsg.rawData = nullptr;
+        incomingMsg.length = 0;
+      }
+    }
+  }
+}
+
+void taskButtons(void *pvParameters)
+{
+  for (;;)
+  {
+    forceOffAlarm.update();
+
+    if (forceOffAlarm.isClick())
+    {
+      featureAlarm(JsonKeys::OFF, 50);
+      if (forceOffAlarm.getClickCount() == 8)
+      {
+        forceOffAlarm.resetClickCount();
+        Serial.println("Đã ấn 8 lần! Đang tiến hành xóa cấu hình và reset...");
+
+        config.clearAll();
+        autoConfig.clearAll();
+        storage.clearAll();
+
+        rgb.setMode(LED_STATIC);
+        rgb.setColor(rgb.parseHexColor("#fc0303"));
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+        for (int i = 0; i < 2; i++)
+        {
+          rgb.setMode(LED_STATIC);
+          rgb.setColor(rgb.parseHexColor("#00ff00"));
+          vTaskDelay(300 / portTICK_PERIOD_MS);
+
+          rgb.setColor(rgb.parseHexColor("#000000"));
+          vTaskDelay(300 / portTICK_PERIOD_MS);
+        }
+
+        Serial.println("Đang Khởi động lại ESP...");
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        ESP.restart();
+      }
+    }
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskAutoScheduler(void *pvParameters)
+{
+  Serial.println("[SCHEDULER] Task bắt đầu quét chu kỳ tự động...");
+  std::vector<String> activeAlarmIds;
+  std::vector<String> idsToDelete;
+  std::vector<String> firedMinuteTaskIds;
+  activeAlarmIds.reserve(4);
+  idsToDelete.reserve(4);
+  firedMinuteTaskIds.reserve(8);
+  uint32_t lastAutomationRun = 0;
+  bool firstAutomationRun = true;
+  int lastMinuteOfDay = -1;
+  uint32_t lastMemLogMs = 0;
+
+  while (1)
+  {
+    logTaskMemory("AutoScheduler", lastMemLogMs);
+    bool automationDue = firstAutomationRun || (millis() - lastAutomationRun >= TIME_SCAN_ROOMTEMP);
+    DateTime now = rtc.now();
+    int currentHour = now.hour();
+    int currentMinute = now.minute();
+    int currentDayOfWeek = now.dayOfTheWeek();
+    int currentMinuteOfDay = timeToMinutes(currentHour, currentMinute);
+
+    // Serial.println(currentMinute);
+    if (currentMinuteOfDay != lastMinuteOfDay)
+    {
+      firedMinuteTaskIds.clear();
+      lastMinuteOfDay = currentMinuteOfDay;
+    }
+
+    JsonArray tasks = autoConfig.get<JsonVariant>(JsonKeys::AUTO_TASKS);
+    idsToDelete.clear();
+
+    for (int i = 0; i < tasks.size(); i++)
+    {
+      JsonVariant task = tasks[i];
+      String taskIdStr = task["id"].as<String>();
+      bool isAlarmTask = false;
+      JsonArray taskActions = task["actions"].as<JsonArray>();
+      for (JsonVariant action : taskActions)
+      {
+        if (strcmp(action["type"] | "", "alarm") == 0)
+        {
+          isAlarmTask = true;
+          break;
+        }
+      }
+
+      auto activeAlarmIt = std::find(activeAlarmIds.begin(), activeAlarmIds.end(), taskIdStr);
+      bool alarmIsActive = activeAlarmIt != activeAlarmIds.end();
+
+      bool dayMatched = false;
+      if (task.containsKey("days") && task["days"].is<JsonArray>())
+      {
+        JsonArray daysArray = task["days"].as<JsonArray>();
+        if (daysArray.size() == 0)
+          dayMatched = true;
+        else
+        {
+          for (JsonVariant d : daysArray)
+          {
+            if (d.as<int>() == currentDayOfWeek)
+            {
+              dayMatched = true;
+              break;
+            }
+          }
+        }
+      }
+      else
+      {
+        dayMatched = true;
+      }
+
+      if (!dayMatched)
+        continue;
+
+      const char *startTimeStr = task["time"] | "";
+      const char *endTimeStr = task["endTime"] | "";
+      int startH = -1, startM = -1, endH = -1, endM = -1;
+      bool hasStartTime = sscanf(startTimeStr, "%d:%d", &startH, &startM) == 2;
+      bool hasEndTime = sscanf(endTimeStr, "%d:%d", &endH, &endM) == 2;
+
+      if (hasStartTime)
+      {
+        bool repeat = task["repeat"] | false;
+        JsonArray daysArray = task["days"].as<JsonArray>();
+        bool hasRepeatDays = !daysArray.isNull() && daysArray.size() > 0;
+        bool isExactMinuteTimer = !hasEndTime || (startH == endH && startM == endM);
+
+        if (isExactMinuteTimer)
+        {
+          bool alreadyFiredThisMinute =
+              std::find(firedMinuteTaskIds.begin(), firedMinuteTaskIds.end(), taskIdStr) != firedMinuteTaskIds.end();
+
+          if (!alreadyFiredThisMinute && currentHour == startH && currentMinute == startM)
+          {
+            Serial.printf("[SCHEDULER] Matched exact-minute task [%s]\n", taskIdStr.c_str());
+            executeTaskAction(task);
+            firedMinuteTaskIds.push_back(taskIdStr);
+
+            if (!repeat && !hasRepeatDays)
+              idsToDelete.push_back(taskIdStr);
+          }
+        }
+
+        if (!isExactMinuteTimer && isTimeInWindow(currentHour, currentMinute, startH, startM, endH, endM))
+        {
+          if ((isAlarmTask && !alarmIsActive) || (!isAlarmTask && automationDue))
+          {
+            Serial.printf("[SCHEDULER] Khớp khung giờ hoạt động của task [%s]\n", taskIdStr.c_str());
+            executeTaskAction(task);
+            if (isAlarmTask)
+              activeAlarmIds.push_back(taskIdStr);
+          }
+        }
+        else if (!isExactMinuteTimer)
+        {
+          if (isAlarmTask && alarmIsActive)
+          {
+            activeAlarmIds.erase(activeAlarmIt);
+            if (activeAlarmIds.empty())
+              featureAlarm(JsonKeys::OFF, task["volume"] | 50);
+            Serial.printf("[ALARM] Alarm [%s] stopped at endTime\n", taskIdStr.c_str());
+
+            bool repeat = task["repeat"] | false;
+            if (!repeat)
+              idsToDelete.push_back(taskIdStr);
+          }
+
+          bool repeat = task["repeat"] | false;
+          if (!isAlarmTask && !repeat && (task["days"].as<JsonArray>().size() == 0))
+          {
+            idsToDelete.push_back(taskIdStr);
+          }
+        }
+      }
+    }
+
+    for (const String &id : idsToDelete)
+    {
+      featureDeleteAutoTask(id.c_str());
+    }
+
+    if (automationDue)
+    {
+      lastAutomationRun = millis();
+      firstAutomationRun = false;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
+void taskTimeSyncStable(void *pv)
+{
+  ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+  constexpr uint32_t RETRY_MS = 60000UL;
+  constexpr uint32_t DAILY_MS = 86400000UL;
+  constexpr TickType_t LOOP = pdMS_TO_TICKS(5000);
+
+  const String zone = config.get<String>(
+      JsonKeys::timezone,
+      "Asia/Ho_Chi_Minh");
+
+  bool synced = false;
+  int lastDay = -1;
+
+  uint32_t lastTry = 0;
+  uint32_t lastSync = 0;
+
+  bool notify = true;
+
+  for (;;)
+  {
+    uint32_t nowMs = millis();
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      bool needSync = false;
+
+      if (!synced)
+      {
+        needSync = (lastTry == 0) ||
+                   (nowMs - lastTry >= RETRY_MS);
+      }
+      else
+      {
+        DateTime t = rtc.now();
+
+        bool rtcValid =
+            t.year() >= 2024 &&
+            t.year() <= 2099 &&
+            t.month() >= 1 &&
+            t.month() <= 12 &&
+            t.day() >= 1 &&
+            t.day() <= 31;
+
+        if (!rtcValid)
+        {
+          needSync = true;
+        }
+        else
+        {
+          if (t.day() != lastDay)
+            needSync = true;
+
+          if ((uint32_t)(nowMs - lastSync) >= DAILY_MS)
+            needSync = true;
+        }
+      }
+
+      if (needSync)
+      {
+        lastTry = nowMs;
+
+        String api = timeManager.getDateTimeFromAPI(zone.c_str());
+
+        if (!api.isEmpty() && rtc.parseTimeEC800X(api))
+        {
+          DateTime verify = rtc.now();
+
+          if (verify.year() >= 2024 &&
+              verify.year() <= 2099)
+          {
+            synced = true;
+            lastSync = millis();
+            lastDay = verify.day();
+
+            xQueueSend(timeSyncQueue, &notify, 0);
+          }
+        }
+      }
+    }
+
+    vTaskDelay(LOOP);
+  }
+}
+
+void taskNetworkMqtt(void *pvParameters)
+{
+  Serial.println("[TASK NETWORK] Khởi động...");
+
+  char topic[160];
+
+  NetworkMode currentMode;
+  bool mqttConnected = false;
+  uint32_t lastWifiRetryTime = 0;
+  uint32_t lastMqttRetryTime = 0;
+  const uint32_t WIFI_RETRY_INTERVAL = 30000;
+  const uint32_t MQTT_RETRY_INTERVAL = 5000;
+  static uint32_t wifiConnectTimeout = 0;
+  const uint32_t WIFI_TIMEOUT_DURATION = 15000;
+  const uint32_t NETWORK_MUTEX_TIMEOUT = pdMS_TO_TICKS(5000);
+
+  String init_ssid = config.get<String>(JsonKeys::ssid, "");
+  String init_pass = config.get<String>(JsonKeys::ssid_pass, "");
+  String deviceName = config.get<String>(JsonKeys::name, DEVICE_NAME);
+  init_ssid.trim();
+  init_pass.trim();
+
+  if (init_ssid == "" || init_ssid.length() == 0)
+  {
+    Serial.println("[TASK NETWORK] Không có cấu hình! Định cấu hình chế độ BLE_ONLY...");
+    client = new BLEMQTT(deviceName.length() > 0 ? deviceName.c_str() : DEVICE_NAME);
+    currentMode = MODE_BLE_ONLY;
+    isWifiMode = false;
+  }
+  else
+  {
+    Serial.println("[TASK NETWORK] Tìm thấy cấu hình! Định cấu hình chế độ WIFI_ACTIVE...");
+    client = new WIFI(sharedMqttClient, init_ssid.c_str(), init_pass.c_str());
+    currentMode = MODE_WIFI_ACTIVE;
+    isWifiMode = true;
+  }
+
+  if (client != nullptr)
+  {
+    client->setCallback(mqttCallback);
+    client->subscribe("device/init");
+  }
+
+  if (currentMode == MODE_WIFI_ACTIVE)
+  {
+    if (xTimeSyncTaskHandle != NULL)
+      xTaskNotifyGive(xTimeSyncTaskHandle);
+
+    client->begin();
+    bool opened = client->mqttOpen(MQTT_HOST, MQTT_PORT);
+    if (!opened)
+      Serial.println("[TASK NETWORK] CẢNH BÁO: mqttOpen() thất bại lúc khởi động!");
+
+    Serial.println("[TASK NETWORK] Đang đợi cấp phát IP từ Router...");
+    uint32_t startWait = millis();
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      vTaskDelay(pdMS_TO_TICKS(500));
+      Serial.print(".");
+      if (millis() - startWait > 12000)
+      {
+        Serial.println("\n[TASK NETWORK] Chờ cấp mạng quá lâu!");
+        break;
+      }
+    }
+
+    Serial.printf("[TASK NETWORK] MQTT clientId=%s\n", deviceSerialNumber);
+    if (opened && buildDeviceTopic(topic, sizeof(topic), "/status"))
+    {
+      if (xSemaphoreTake(networkMutex, NETWORK_MUTEX_TIMEOUT) == pdTRUE)
+      {
+        mqttConnected = client->connectMQTT(
+            deviceSerialNumber,
+            MQTT_USER, MQTT_PASS,
+            topic, 0, true, "offline");
+        xSemaphoreGive(networkMutex);
+      }
+      else
+      {
+        Serial.println("[TASK NETWORK] Bo qua connectMQTT: networkMutex dang bi giu boi task khac");
+      }
+    }
+
+    if (mqttConnected)
+    {
+      Serial.println("[TASK NETWORK]  WiFi MQTT Kết nối thành công ngay khi khởi động!");
+      xTaskNotifyGive(xTaskInit);
+      if (xTimeSyncTaskHandle != NULL)
+      {
+        Serial.println("[TASK NETWORK] Phát lệnh kích hoạt đồng bộ RTC...");
+        xTaskNotifyGive(xTimeSyncTaskHandle);
+      }
+
+      subscribeAllFeatures(client);
+      client->subscribe("device/init");
+    }
+    else if (WiFi.status() == WL_CONNECTED)
+    {
+      Serial.println("[TASK NETWORK] WiFi da ket noi nhung MQTT that bai. Giu WiFi mode, khong bat BLE.");
+      isWifiMode = true;
+      currentMode = MODE_WIFI_ACTIVE;
+      lastMqttRetryTime = millis();
+    }
+    else
+    {
+      Serial.println("[TASK NETWORK] Khởi động WiFi/MQTT thất bại! Kích hoạt cứu hộ BLE_FALLBACK...");
+      Serial.printf("[MEM-TRANSITION] Truoc khi xoa WiFi client: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+      if (client != nullptr)
+      {
+        client->disconnect();
+        delete client;
+        client = nullptr;
+      }
+
+      Serial.printf("[MEM-TRANSITION] Sau khi xoa WiFi client: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+      client = new BLEMQTT(deviceName.length() > 0 ? deviceName.c_str() : DEVICE_NAME);
+      client->setCallback(mqttCallback);
+      subscribeAllFeatures(client);
+      client->subscribe("device/init");
+      client->begin();
+
+      Serial.printf("[MEM-TRANSITION] Sau khi khoi tao BLE: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+      isWifiMode = false;
+      currentMode = MODE_BLE_FALLBACK;
+      lastWifiRetryTime = millis();
+    }
+  }
+  else
+  {
+    client->begin();
+    Serial.println("[TASK NETWORK] BLE Mặc định đã sẵn sàng nhận cấu hình...");
+  }
+
+  while (true)
+  {
+    // Đã bỏ deviceName = config.get<String>(...) chạy mỗi 20ms để tránh phân mảnh heap.
+    // Chỉ lấy deviceName tại đúng chỗ cần dùng (khi tạo BLEMQTT mới).
+
+    switch (currentMode)
+    {
+    case MODE_BLE_ONLY:
+      if (client != nullptr)
+        client->loop();
+      break;
+
+    case MODE_WIFI_ACTIVE:
+      if (WiFi.status() != WL_CONNECTED)
+      {
+        mqttConnected = false;
+      }
+      else
+      {
+        mqttConnected = client != nullptr && client->loop();
+        if (!mqttConnected && millis() - lastMqttRetryTime > MQTT_RETRY_INTERVAL)
+        {
+          lastMqttRetryTime = millis();
+          Serial.println("[TASK NETWORK] WiFi van ket noi, MQTT loi. Thu ket noi lai MQTT, khong bat BLE.");
+          Serial.printf("[TASK NETWORK] MQTT reconnect clientId=%s\n", deviceSerialNumber);
+
+          if (client != nullptr && buildDeviceTopic(topic, sizeof(topic), "/status"))
+          {
+            if (xSemaphoreTake(networkMutex, NETWORK_MUTEX_TIMEOUT) == pdTRUE)
+            {
+              bool ok = client->connectMQTT(deviceSerialNumber,
+                                            MQTT_USER, MQTT_PASS, topic, 0, true, "offline");
+              xSemaphoreGive(networkMutex);
+
+              if (ok)
+              {
+                mqttConnected = true;
+                subscribeAllFeatures(client);
+                client->subscribe("device/init");
+              }
+            }
+            else
+            {
+              Serial.println("[TASK NETWORK] Bo qua reconnect: networkMutex dang bi giu boi task khac");
+            }
+          }
+        }
+      }
+
+      if (!mqttConnected && WiFi.status() != WL_CONNECTED)
+      {
+        Serial.println("[TASK NETWORK] Mất kết nối mạng WiFi hoặc Broker!");
+        Serial.println("[TASK NETWORK] Chuyển sang chế độ cứu hộ BLE_FALLBACK...");
+        Serial.printf("[MEM-TRANSITION] Truoc khi xoa WiFi client: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+        if (client != nullptr)
+        {
+          client->disconnect();
+          delete client;
+          client = nullptr;
+        }
+
+        WiFi.setSleep(WIFI_PS_MIN_MODEM);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        Serial.printf("[MEM-TRANSITION] Sau khi xoa WiFi client: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+        String currentDeviceName = config.get<String>(JsonKeys::name, DEVICE_NAME);
+        client = new BLEMQTT(currentDeviceName.c_str());
+        client->setCallback(mqttCallback);
+        subscribeAllFeatures(client);
+        client->subscribe("device/init");
+        client->begin();
+
+        Serial.printf("[MEM-TRANSITION] Sau khi khoi tao BLE: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+        isWifiMode = false;
+        currentMode = MODE_BLE_FALLBACK;
+        lastWifiRetryTime = millis();
+      }
+      break;
+
+    case MODE_BLE_FALLBACK:
+      if (client != nullptr)
+        client->loop();
+
+      if (millis() - lastWifiRetryTime > WIFI_RETRY_INTERVAL && !isWifiConnecting)
+      {
+        lastWifiRetryTime = millis();
+        Serial.println("[TASK NETWORK] Phát lệnh kết nối lại WiFi ngầm (Non-blocking)...");
+
+        WiFi.setSleep(WIFI_PS_MIN_MODEM);
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+        String r_ssid = config.get<String>(JsonKeys::ssid, "");
+        String r_pass = config.get<String>(JsonKeys::ssid_pass, "");
+
+        if (r_ssid.length() > 0)
+        {
+          WiFi.begin(r_ssid.c_str(), r_pass.c_str());
+          isWifiConnecting = true;
+          wifiConnectTimeout = millis();
+        }
+        else
+        {
+          Serial.println("[TASK NETWORK] Thử lại thất bại: Cấu hình SSID trống.");
+        }
+      }
+
+      if (isWifiConnecting)
+      {
+        if (WiFi.status() == WL_CONNECTED)
+        {
+          Serial.println("[TASK NETWORK]  WiFi kết nối thành công! Tiến hành tạo kênh MQTT...");
+          Serial.printf("[MEM-TRANSITION] Truoc khi xoa BLE client: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+          // Xóa BLE TRƯỚC khi tạo WiFi/MQTT mới, tránh giữ đồng thời 2 stack mạng cùng lúc.
+          if (client != nullptr)
+          {
+            client->disconnect();
+            delete client;
+            client = nullptr;
+          }
+          vTaskDelay(pdMS_TO_TICKS(100));
+
+          Serial.printf("[MEM-TRANSITION] Sau khi xoa BLE, truoc khi tao WiFi: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+          String live_ssid = config.get<String>(JsonKeys::ssid, "");
+          String live_pass = config.get<String>(JsonKeys::ssid_pass, "");
+
+          WIFI *testWifiClient = new WIFI(sharedMqttClient, live_ssid.c_str(), live_pass.c_str());
+          bool opened = testWifiClient->mqttOpen(MQTT_HOST, MQTT_PORT);
+
+          bool connected = false;
+          if (opened && buildDeviceTopic(topic, sizeof(topic), "/status"))
+          {
+            if (xSemaphoreTake(networkMutex, NETWORK_MUTEX_TIMEOUT) == pdTRUE)
+            {
+              Serial.printf("[TASK NETWORK] MQTT fallback reconnect clientId=%s\n", deviceSerialNumber);
+              connected = testWifiClient->connectMQTT(
+                  deviceSerialNumber,
+                  MQTT_USER, MQTT_PASS,
+                  topic, 0, true, "offline");
+              xSemaphoreGive(networkMutex);
+            }
+            else
+            {
+              Serial.println("[TASK NETWORK] Bo qua fallback connect: networkMutex dang bi giu boi task khac");
+            }
+          }
+          else if (!opened)
+          {
+            Serial.println("[TASK NETWORK] CẢNH BÁO: mqttOpen() thất bại lúc fallback reconnect!");
+          }
+
+          if (connected)
+          {
+            Serial.println("[TASK NETWORK] MQTT kết nối thành công! Đã ở chế độ WiFi.");
+            Serial.printf("[MEM-TRANSITION] Sau khi ket noi WiFi/MQTT: freeHeap=%lu\n", (unsigned long)ESP.getFreeHeap());
+
+            client = testWifiClient;
+            client->setCallback(mqttCallback);
+            subscribeAllFeatures(client);
+            client->subscribe("device/init");
+
+            WiFi.setSleep(WIFI_PS_MIN_MODEM);
+            isWifiMode = true;
+            isWifiConnecting = false;
+            currentMode = MODE_WIFI_ACTIVE;
+          }
+          else
+          {
+            Serial.println("[TASK NETWORK] WiFi/MQTT lỗi sau khi đã xóa BLE. Khôi phục lại BLE...");
+            delete testWifiClient;
+            WiFi.disconnect();
+            isWifiConnecting = false;
+
+            String currentDeviceName = config.get<String>(JsonKeys::name, DEVICE_NAME);
+            client = new BLEMQTT(currentDeviceName.c_str());
+            client->setCallback(mqttCallback);
+            subscribeAllFeatures(client);
+            client->subscribe("device/init");
+            client->begin();
+
+            currentMode = MODE_BLE_FALLBACK;
+          }
+        }
+        else if (millis() - wifiConnectTimeout > WIFI_TIMEOUT_DURATION)
+        {
+          Serial.printf("[TASK NETWORK] Kết nối WiFi quá thời gian (%ds). Thất bại! Tiếp tục giữ sóng BLE.\n", WIFI_TIMEOUT_DURATION / 1000);
+          WiFi.disconnect();
+          WiFi.setSleep(WIFI_PS_MAX_MODEM);
+          isWifiConnecting = false;
+        }
+      }
+      break;
+    default:
+      break;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+void taskBuzzer(void *pvParameters)
+{
+  buzzerSystem.begin();
+  buzzerSystem.setVolume(60);                       // 60% âm lượng
+  buzzerSystem.setAlarmMode(parseAlarmMode("OFF")); // Kiểu còi cảnh sát
+
+  while (1)
+  {
+    uint32_t delayMs = buzzerSystem.runRTOSStep();
+    vTaskDelay(pdMS_TO_TICKS(delayMs));
+  }
+}
+
+void taskLED(void *pvParameters)
+{
+  Serial.println("[TASK LED] Đang khởi động...");
+  FastLED.addLeds<WS2812B, RGB_LED_DATA_PIN, GRB>(leds, NUM_LEDS);
+  rgb.begin();
+  fastLedReady = true;
+  uint32_t lastOtaLedStepMs = 0;
+  while (true)
+  {
+    if (otaLedOverride)
+    {
+      uint32_t now = millis();
+      if (now - lastOtaLedStepMs >= 100)
+      {
+        lastOtaLedStepMs = now;
+        fill_solid(leds, NUM_LEDS, CRGB::Black);
+        leds[otaLedPosition % NUM_LEDS] = CRGB::Blue;
+        otaLedPosition = (otaLedPosition + 1) % NUM_LEDS;
+        FastLED.setBrightness(180);
+        FastLED.show();
+      }
+    }
+    else
+    {
+      rgb.update();
+    }
+    vTaskDelay(pdMS_TO_TICKS(16));
+  }
+}
+
+////////////////////////////////////////////////////////////
+void resetSmartSleep()
+{
+  SmartSleep::reset();
+  smartSleepProtocol = decode_type_t::UNKNOWN;
+
+  if (xTaskSleep != nullptr)
+  {
+    xTaskNotifyGive(xTaskSleep);
+  }
+
+  Serial.println("[SMART_SLEEP] Reset");
+}
+void stopSmartSleep()
+{
+  if (!SmartSleep::isActive())
+  {
+    Serial.println("[SMART_SLEEP] Already stopped");
+    return;
+  }
+
+  SmartSleep::stop();
+
+  if (xTaskSleep != nullptr)
+  {
+    // Đánh thức task ngay, không cần chờ hết 30 giây.
+    xTaskNotifyGive(xTaskSleep);
+  }
+
+  Serial.println("[SMART_SLEEP] Stop requested");
+}
+
+bool startSmartSleep(
+    decode_type_t protocol,
+    bool power,
+    float setpointC,
+    stdAc::fanspeed_t fan,
+    stdAc::swingv_t swing,
+    stdAc::opmode_t mode,
+    uint8_t wakeHour,
+    uint8_t wakeMinute)
+{
+  if (xTaskSleep == nullptr)
+  {
+    Serial.println("[SMART_SLEEP] Task is not available");
+    return false;
+  }
+
+  const float currentRoomTemp = ntcTemp.getTemperature();
+
+  if (!std::isfinite(currentRoomTemp))
+  {
+    Serial.println("[SMART_SLEEP] Room temperature is not ready");
+    return false;
+  }
+
+  const time_t nowEpoch = time(nullptr);
+
+  if (nowEpoch < 100000)
+  {
+    Serial.println("[SMART_SLEEP] System time is not synchronized");
+    return false;
+  }
+
+  if (protocol == decode_type_t::UNKNOWN)
+  {
+    Serial.println("[SMART_SLEEP] Invalid AC protocol");
+    return false;
+  }
+
+  /*
+   * Chuyển trạng thái MQTT hiện tại thành stdAc::state_t
+   * để SmartSleep sử dụng làm trạng thái ban đầu.
+   */
+  currentAcState = {};
+  currentAcState.protocol = protocol;
+  currentAcState.model = -1;
+  currentAcState.power = power;
+  currentAcState.mode = mode;
+  currentAcState.celsius = true;
+  currentAcState.degrees = setpointC;
+  currentAcState.fanspeed = fan;
+  currentAcState.swingv = swing;
+  currentAcState.swingh = stdAc::swingh_t::kMiddle;
+  currentAcState.quiet = false;
+  currentAcState.turbo = false;
+  currentAcState.econo = true;
+  currentAcState.light = false;
+  currentAcState.filter = false;
+  currentAcState.clean = false;
+  currentAcState.beep = false;
+  currentAcState.sleep = -1;
+  currentAcState.clock = -1;
+
+  SmartSleep::Config sleepConfig;
+
+  sleepConfig.subject = SmartSleep::Subject::ADULT;
+  sleepConfig.wakeHour = wakeHour;
+  sleepConfig.wakeMinute = wakeMinute;
+  sleepConfig.temperatureStepC = 1.0f;
+
+  sleepConfig.minimumCommandIntervalMs =
+      10UL * 60UL * 1000UL;
+
+  const bool started = SmartSleep::begin(
+      sleepConfig,
+      currentAcState,
+      currentRoomTemp,
+      nowEpoch);
+
+  if (!started)
+  {
+    Serial.printf(
+        "[SMART_SLEEP] Begin failed: room=%.1f setpoint=%.1f wake=%02u:%02u\n",
+        currentRoomTemp,
+        setpointC,
+        wakeHour,
+        wakeMinute);
+
+    return false;
+  }
+
+  smartSleepProtocol = protocol;
+
+  // Đánh thức task Sleep đang chờ.
+  xTaskNotifyGive(xTaskSleep);
+
+  Serial.printf(
+      "[SMART_SLEEP] Started protocol=%s setpoint=%.1f room=%.1f wake=%02u:%02u\n",
+      typeToString(protocol).c_str(),
+      setpointC,
+      currentRoomTemp,
+      wakeHour,
+      wakeMinute);
+
+  return true;
+}

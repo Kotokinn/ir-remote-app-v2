@@ -141,4 +141,26 @@
   .bg-brand-gradient {
     background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   }
+
+  @keyframes rgb-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.15; }
+  }
+  @keyframes rgb-breathe {
+    0%, 100% { opacity: 0.35; transform: scale(0.94); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+  @keyframes rgb-flow {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+  .animate-rgb-blink {
+    animation: rgb-blink 1s steps(1) infinite;
+  }
+  .animate-rgb-breathe {
+    animation: rgb-breathe 2.4s ease-in-out infinite;
+  }
+  .animate-rgb-flow {
+    animation: rgb-flow 3s linear infinite;
+  }
 }

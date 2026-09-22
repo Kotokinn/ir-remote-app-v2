@@ -3,12 +3,19 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { House } from "lucide-react";
+import { useAuthStore } from "@/lib/store/auth-store";
 
 export default function SplashPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const timer = setTimeout(() => { router.replace("/onboarding"); }, 1200);
+    const timer = setTimeout(() => {
+      void (async () => {
+        await useAuthStore.persist.rehydrate();
+        const { accessToken } = useAuthStore.getState();
+        router.replace(accessToken ? "/home" : "/onboarding");
+      })();
+    }, 1200);
     return () => { clearTimeout(timer); };
   }, [router]);
 

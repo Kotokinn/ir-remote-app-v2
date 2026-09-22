@@ -22,6 +22,17 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-http = "2"
+tokio = { version = "1", features = ["net", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest-eventsource = "0.6"
+futures-util = "0.3"
+tauri-plugin-blec = "0.12"
+tauri-plugin-fcm = "0.2.0"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [features]
 # by default Tauri runs in production mode

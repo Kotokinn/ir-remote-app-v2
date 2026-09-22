@@ -1,0 +1,1473 @@
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>
+#elif defined(ESP32)
+#include <WiFi.h>
+#else
+#error "Only ESP32 and ESP8266 are supported"
+#endif
+
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <PubSubClient.h>
+
+// =====================================================
+// CONFIG
+// =====================================================
+
+constexpr char WIFI_SSID[] = "Viet Dan";
+constexpr char WIFI_PASSWORD[] = "vdtas7979";
+
+// TBMQ
+constexpr char TBMQ_SERVER[] = "192.168.1.209";
+constexpr uint16_t TBMQ_PORT = 1884U;
+
+// TBMQ credential
+constexpr char MQTT_CLIENT_ID[] = "randompullshitletgo";
+constexpr char MQTT_USERNAME[] = "device";
+constexpr char MQTT_PASSWORD[] = "device";
+
+// Tenant / Device
+constexpr char TENANT_ID[] = "tenant-001";
+constexpr char DEVICE_ID[] = "HUB-F65469";
+
+constexpr uint32_t SERIAL_DEBUG_BAUD = 115200U;
+constexpr uint16_t MQTT_BUFFER_SIZE = 1024U;
+
+// =====================================================
+// TIMING
+// =====================================================
+
+constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000U;
+constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 5000U;
+constexpr uint32_t MQTT_RECONNECT_INTERVAL_MS = 5000U;
+constexpr uint32_t TELEMETRY_SEND_INTERVAL_MS = 2000U;
+
+// Claiming
+// Device sẽ cho phép claim trong 24 giờ.
+constexpr uint32_t CLAIM_DURATION_MS = 86400000UL;
+
+// Nếu true: tự gửi claim mỗi khi MQTT connect.
+// Nếu false: chỉ gửi khi gọi publishClaim().
+constexpr bool AUTO_CLAIM_ON_CONNECT = true;
+
+// Chỉ gửi claim một lần cho mỗi MQTT connection.
+bool claimSentThisConnection = false;
+
+// =====================================================
+// LED CONFIG
+// =====================================================
+
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 23
+#endif
+
+constexpr uint16_t BLINKING_INTERVAL_MS_MIN = 10U;
+constexpr uint16_t BLINKING_INTERVAL_MS_MAX = 60000U;
+
+// =====================================================
+// TOPICS
+// =====================================================
+
+char TELEMETRY_TOPIC[160];
+char ATTRIBUTES_TOPIC[160];
+char STATE_TOPIC[160];
+
+char COMMAND_SUB_TOPIC[180];
+char COMMAND_PREFIX[160];
+char COMMAND_RESPONSE_PREFIX[180];
+
+char CONFIG_TOPIC[160];
+
+// Topic claim gửi từ device → TBMQ → TBGW
+char CLAIM_TOPIC[160];
+
+// =====================================================
+// RUNTIME STATE
+// =====================================================
+
+uint8_t ledMode = 0U; // 0 = constant, 1 = blinking
+bool ledState = false;
+bool pumpState = false;
+
+uint16_t blinkingInterval = 1000U;
+
+uint32_t previousStateChange = 0U;
+uint32_t previousDataSend = 0U;
+uint32_t previousWiFiReconnect = 0U;
+uint32_t previousMqttReconnect = 0U;
+
+// =====================================================
+// MQTT
+// =====================================================
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+bool intervalElapsed(
+    const uint32_t now,
+    const uint32_t previous,
+    const uint32_t interval)
+{
+  return static_cast<uint32_t>(now - previous) >= interval;
+}
+
+// =====================================================
+// DEVICE SERIAL
+// =====================================================
+//
+// ESP32:
+//   lấy MAC/eFuse MAC
+//
+// ESP8266:
+//   lấy Chip ID
+//
+// Đây chính là secretKey dùng cho claiming.
+// =====================================================
+
+String getDeviceSerial()
+{
+#if defined(ESP32)
+
+  const uint64_t chipId = ESP.getEfuseMac();
+
+  char serial[17];
+
+  snprintf(
+      serial,
+      sizeof(serial),
+      "%04X%08X",
+      static_cast<uint16_t>(chipId >> 32),
+      static_cast<uint32_t>(chipId));
+
+  return String(serial);
+
+#elif defined(ESP8266)
+
+  char serial[9];
+
+  snprintf(
+      serial,
+      sizeof(serial),
+      "%08X",
+      ESP.getChipId());
+
+  return String(serial);
+
+#endif
+}
+
+// =====================================================
+// DEVICE ID
+// =====================================================
+//
+// Nếu muốn DEVICE_ID cũng tự động theo serial,
+// có thể thay constexpr DEVICE_ID bằng String runtime.
+//
+// Hiện tại giữ DEVICE_ID của hệ thống bạn.
+// =====================================================
+
+String getClaimSecret()
+{
+  return getDeviceSerial();
+}
+
+// =====================================================
+// TOPIC BUILD
+// =====================================================
+
+void buildTopics()
+{
+  snprintf(
+      TELEMETRY_TOPIC,
+      sizeof(TELEMETRY_TOPIC),
+      "v1/tenants/%s/devices/%s/telemetry",
+      TENANT_ID,
+      DEVICE_ID);
+
+  snprintf(
+      ATTRIBUTES_TOPIC,
+      sizeof(ATTRIBUTES_TOPIC),
+      "v1/tenants/%s/devices/%s/attributes",
+      TENANT_ID,
+      DEVICE_ID);
+
+  snprintf(
+      STATE_TOPIC,
+      sizeof(STATE_TOPIC),
+      "v1/tenants/%s/devices/%s/state",
+      TENANT_ID,
+      DEVICE_ID);
+
+  snprintf(
+      COMMAND_PREFIX,
+      sizeof(COMMAND_PREFIX),
+      "v1/tenants/%s/devices/%s/commands/request/",
+      TENANT_ID,
+      DEVICE_ID);
+
+  snprintf(
+      COMMAND_SUB_TOPIC,
+      sizeof(COMMAND_SUB_TOPIC),
+      "%s+",
+      COMMAND_PREFIX);
+
+  snprintf(
+      COMMAND_RESPONSE_PREFIX,
+      sizeof(COMMAND_RESPONSE_PREFIX),
+      "v1/tenants/%s/devices/%s/commands/response/",
+      TENANT_ID,
+      DEVICE_ID);
+
+  snprintf(
+      CONFIG_TOPIC,
+      sizeof(CONFIG_TOPIC),
+      "v1/tenants/%s/devices/%s/config/set",
+      TENANT_ID,
+      DEVICE_ID);
+
+  // ===================================================
+  // CLAIM TOPIC
+  // ===================================================
+  //
+  // ESP32
+  //    ↓
+  // TBMQ
+  //    ↓
+  // TB Gateway
+  //    ↓
+  // TBCE
+  //
+  snprintf(
+      CLAIM_TOPIC,
+      sizeof(CLAIM_TOPIC),
+      "v1/tenants/%s/devices/%s/claim",
+      TENANT_ID,
+      DEVICE_ID);
+}
+
+// =====================================================
+// MAC
+// =====================================================
+
+String formatMac(const uint8_t *mac)
+{
+  if (mac == nullptr)
+  {
+    return String();
+  }
+
+  char buffer[18];
+
+  snprintf(
+      buffer,
+      sizeof(buffer),
+      "%02X:%02X:%02X:%02X:%02X:%02X",
+      mac[0],
+      mac[1],
+      mac[2],
+      mac[3],
+      mac[4],
+      mac[5]);
+
+  return String(buffer);
+}
+
+String getStationMac()
+{
+  uint8_t mac[6] = {0};
+
+  WiFi.macAddress(mac);
+
+  return formatMac(mac);
+}
+
+String getBssid()
+{
+  const uint8_t *bssid = WiFi.BSSID();
+
+  return bssid == nullptr
+             ? String()
+             : formatMac(bssid);
+}
+
+// =====================================================
+// LED
+// =====================================================
+
+void writeLed(const bool state)
+{
+  ledState = state;
+
+  digitalWrite(
+      LED_BUILTIN,
+      ledState ? HIGH : LOW);
+}
+
+// =====================================================
+// JSON PUBLISH
+// =====================================================
+
+bool publishJson(
+    const char *topic,
+    const JsonDocument &document,
+    const bool retained = false)
+{
+  if (!mqttClient.connected())
+  {
+    return false;
+  }
+
+  char payload[MQTT_BUFFER_SIZE];
+
+  const size_t length =
+      serializeJson(
+          document,
+          payload,
+          sizeof(payload));
+
+  if (length == 0U ||
+      length >= sizeof(payload))
+  {
+    Serial.println(
+        "[MQTT] JSON serialization failed or payload too large");
+
+    return false;
+  }
+
+  const bool result =
+      mqttClient.publish(
+          topic,
+          reinterpret_cast<const uint8_t *>(payload),
+          static_cast<unsigned int>(length),
+          retained);
+
+  Serial.printf(
+      "[MQTT] Publish topic=%s result=%s payload=%s\n",
+      topic,
+      result ? "true" : "false",
+      payload);
+
+  return result;
+}
+
+// =====================================================
+// CLAIM
+// =====================================================
+
+void publishClaim()
+{
+  if (!mqttClient.connected())
+  {
+    Serial.println(
+        "[CLAIM] MQTT not connected");
+
+    return;
+  }
+
+  const String serial =
+      getDeviceSerial();
+
+  const String secretKey =
+      getClaimSecret();
+
+  JsonDocument document;
+
+  document["secretKey"] = secretKey;
+  document["durationMs"] =
+      CLAIM_DURATION_MS;
+
+  Serial.println();
+  Serial.println("==============================");
+  Serial.println("[CLAIM] Device Claiming");
+  Serial.println("==============================");
+
+  Serial.printf(
+      "[CLAIM] Device ID: %s\n",
+      DEVICE_ID);
+
+  Serial.printf(
+      "[CLAIM] Serial: %s\n",
+      serial.c_str());
+
+  Serial.printf(
+      "[CLAIM] Secret: %s\n",
+      secretKey.c_str());
+
+  Serial.printf(
+      "[CLAIM] Duration: %lu ms\n",
+      static_cast<unsigned long>(
+          CLAIM_DURATION_MS));
+
+  Serial.printf(
+      "[CLAIM] Topic: %s\n",
+      CLAIM_TOPIC);
+
+  publishJson(
+      CLAIM_TOPIC,
+      document,
+      false);
+
+  Serial.println(
+      "[CLAIM] Claim request sent");
+
+  Serial.println("==============================");
+}
+
+// =====================================================
+// WIFI
+// =====================================================
+
+bool connectWiFi()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    return true;
+  }
+
+  Serial.print(
+      "[WIFI] Connecting to ");
+
+  Serial.println(WIFI_SSID);
+
+  WiFi.mode(WIFI_STA);
+
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+
+  WiFi.begin(
+      WIFI_SSID,
+      WIFI_PASSWORD);
+
+  const uint32_t startedAt =
+      millis();
+
+  while (
+      WiFi.status() != WL_CONNECTED)
+  {
+    if (intervalElapsed(
+            millis(),
+            startedAt,
+            WIFI_CONNECT_TIMEOUT_MS))
+    {
+      Serial.println();
+      Serial.println(
+          "[WIFI] Connection timeout");
+
+      return false;
+    }
+
+    Serial.print('.');
+
+    delay(500);
+  }
+
+  Serial.println();
+  Serial.println(
+      "[WIFI] Connected");
+
+  Serial.print(
+      "[WIFI] IP: ");
+
+  Serial.println(
+      WiFi.localIP());
+
+  Serial.print(
+      "[WIFI] MAC: ");
+
+  Serial.println(
+      getStationMac());
+
+  Serial.print(
+      "[DEVICE] Serial: ");
+
+  Serial.println(
+      getDeviceSerial());
+
+  return true;
+}
+
+bool ensureWiFiConnected()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    return true;
+  }
+
+  const uint32_t now =
+      millis();
+
+  if (!intervalElapsed(
+          now,
+          previousWiFiReconnect,
+          WIFI_RECONNECT_INTERVAL_MS))
+  {
+    return false;
+  }
+
+  previousWiFiReconnect = now;
+
+  return connectWiFi();
+}
+
+// =====================================================
+// STATE
+// =====================================================
+
+void publishDeviceState(
+    const bool retained = true)
+{
+  JsonDocument document;
+
+  document["deviceName"] =
+      DEVICE_ID;
+
+  document["online"] =
+      true;
+
+  document["ledMode"] =
+      ledMode;
+
+  document["ledState"] =
+      ledState;
+
+  document["pumpState"] =
+      pumpState;
+
+  document["blinkingInterval"] =
+      blinkingInterval;
+
+  document["rssi"] =
+      WiFi.RSSI();
+
+  publishJson(
+      STATE_TOPIC,
+      document,
+      retained);
+}
+
+// =====================================================
+// ATTRIBUTES
+// =====================================================
+
+void publishAttributes()
+{
+  JsonDocument document;
+
+  document["deviceName"] =
+      DEVICE_ID;
+
+  // ===================================================
+  // Serial
+  // ===================================================
+
+  document["serialNumber"] =
+      getDeviceSerial();
+
+  // ===================================================
+  // Network
+  // ===================================================
+
+  document["macAddress"] =
+      getStationMac();
+
+  document["localIp"] =
+      WiFi.localIP().toString();
+
+  document["ssid"] =
+      WiFi.SSID();
+
+  document["bssid"] =
+      getBssid();
+
+  document["channel"] =
+      WiFi.channel();
+
+  // ===================================================
+  // Firmware
+  // ===================================================
+
+  document["firmwareVersion"] =
+      "1.0.0";
+
+  // ===================================================
+  // Device State
+  // ===================================================
+
+  document["ledMode"] =
+      ledMode;
+
+  document["ledState"] =
+      ledState;
+
+  document["pumpState"] =
+      pumpState;
+
+  document["blinkingInterval"] =
+      blinkingInterval;
+
+  publishJson(
+      ATTRIBUTES_TOPIC,
+      document,
+      true);
+}
+
+// =====================================================
+// TELEMETRY
+// =====================================================
+
+void sendPeriodicData()
+{
+  if (!mqttClient.connected())
+  {
+    return;
+  }
+
+  const uint32_t now =
+      millis();
+
+  if (!intervalElapsed(
+          now,
+          previousDataSend,
+          TELEMETRY_SEND_INTERVAL_MS))
+  {
+    return;
+  }
+
+  previousDataSend = now;
+
+  const int temperature =
+      random(10, 40);
+
+  const int waterLevel =
+      random(0, 101);
+
+  JsonDocument document;
+
+  document["deviceName"] =
+      DEVICE_ID;
+
+  document["temperature"] =
+      temperature;
+
+  document["waterLevel"] =
+      waterLevel;
+
+  document["rssi"] =
+      WiFi.RSSI();
+
+  document["ledMode"] =
+      ledMode;
+
+  document["ledState"] =
+      ledState;
+
+  document["pumpState"] =
+      pumpState;
+
+  const bool sent =
+      publishJson(
+          TELEMETRY_TOPIC,
+          document,
+          false);
+
+  Serial.printf(
+      "[DATA] temperature=%d waterLevel=%d sent=%s\n",
+      temperature,
+      waterLevel,
+      sent ? "true" : "false");
+}
+
+// =====================================================
+// COMMAND RESPONSE
+// =====================================================
+
+void sendCommandResponse(
+    const char *requestId,
+    const bool success,
+    const char *message)
+{
+  char responseTopic[220];
+
+  snprintf(
+      responseTopic,
+      sizeof(responseTopic),
+      "%s%s",
+      COMMAND_RESPONSE_PREFIX,
+      requestId);
+
+  JsonDocument response;
+
+  response["success"] =
+      success;
+
+  response["message"] =
+      message;
+
+  response["ledMode"] =
+      ledMode;
+
+  response["ledState"] =
+      ledState;
+
+  response["pumpState"] =
+      pumpState;
+
+  response["blinkingInterval"] =
+      blinkingInterval;
+
+  publishJson(
+      responseTopic,
+      response,
+      false);
+}
+
+// =====================================================
+// COMMAND
+// =====================================================
+
+void processCommand(
+    const char *requestId,
+    const JsonDocument &document)
+{
+  const char *method =
+      document["method"] | "";
+
+  // ===================================================
+  // getState
+  // ===================================================
+
+  if (strcmp(
+          method,
+          "getState") == 0)
+  {
+    sendCommandResponse(
+        requestId,
+        true,
+        "Current state");
+
+    return;
+  }
+
+  // ===================================================
+  // setState / setPump
+  // ===================================================
+
+  if (
+      strcmp(method, "setState") == 0 ||
+      strcmp(method, "setPump") == 0)
+  {
+    bool requestedState = false;
+
+    if (document["params"].is<bool>())
+    {
+      requestedState =
+          document["params"].as<bool>();
+    }
+    else
+    {
+      requestedState =
+          document["params"]["state"] |
+          false;
+    }
+
+    pumpState =
+        requestedState;
+
+    Serial.printf(
+        "[CMD] pumpState=%s\n",
+        pumpState ? "true" : "false");
+
+    publishDeviceState(true);
+
+    sendCommandResponse(
+        requestId,
+        true,
+        "Pump state updated");
+
+    return;
+  }
+
+  // ===================================================
+  // setLedMode
+  // ===================================================
+
+  if (
+      strcmp(
+          method,
+          "setLedMode") == 0)
+  {
+    int requestedMode = -1;
+
+    if (document["params"].is<int>())
+    {
+      requestedMode =
+          document["params"].as<int>();
+    }
+    else
+    {
+      requestedMode =
+          document["params"]["mode"] |
+          -1;
+    }
+
+    if (
+        requestedMode != 0 &&
+        requestedMode != 1)
+    {
+      sendCommandResponse(
+          requestId,
+          false,
+          "Mode must be 0 or 1");
+
+      return;
+    }
+
+    ledMode =
+        static_cast<uint8_t>(
+            requestedMode);
+
+    previousStateChange =
+        millis();
+
+    publishDeviceState(true);
+    publishAttributes();
+
+    sendCommandResponse(
+        requestId,
+        true,
+        "LED mode updated");
+
+    return;
+  }
+
+  // ===================================================
+  // setLedState
+  // ===================================================
+
+  if (
+      strcmp(
+          method,
+          "setLedState") == 0)
+  {
+    bool requestedState = false;
+
+    if (document["params"].is<bool>())
+    {
+      requestedState =
+          document["params"].as<bool>();
+    }
+    else
+    {
+      requestedState =
+          document["params"]["state"] |
+          false;
+    }
+
+    writeLed(
+        requestedState);
+
+    publishDeviceState(true);
+    publishAttributes();
+
+    sendCommandResponse(
+        requestId,
+        true,
+        "LED state updated");
+
+    return;
+  }
+
+  // ===================================================
+  // setBlinkingInterval
+  // ===================================================
+
+  if (
+      strcmp(
+          method,
+          "setBlinkingInterval") == 0)
+  {
+    uint32_t requestedInterval =
+        0U;
+
+    if (
+        document["params"]
+            .is<uint32_t>())
+    {
+      requestedInterval =
+          document["params"]
+              .as<uint32_t>();
+    }
+    else
+    {
+      requestedInterval =
+          document["params"]["value"] |
+          0U;
+    }
+
+    if (
+        requestedInterval <
+            BLINKING_INTERVAL_MS_MIN ||
+        requestedInterval >
+            BLINKING_INTERVAL_MS_MAX)
+    {
+      sendCommandResponse(
+          requestId,
+          false,
+          "Invalid blinking interval");
+
+      return;
+    }
+
+    blinkingInterval =
+        static_cast<uint16_t>(
+            requestedInterval);
+
+    previousStateChange =
+        millis();
+
+    publishDeviceState(true);
+    publishAttributes();
+
+    sendCommandResponse(
+        requestId,
+        true,
+        "Blinking interval updated");
+
+    return;
+  }
+
+  // ===================================================
+  // claim
+  // ===================================================
+
+  if (
+      strcmp(
+          method,
+          "claim") == 0)
+  {
+    publishClaim();
+
+    sendCommandResponse(
+        requestId,
+        true,
+        "Claim request sent");
+
+    return;
+  }
+
+  // ===================================================
+  // UNKNOWN
+  // ===================================================
+
+  sendCommandResponse(
+      requestId,
+      false,
+      "Unknown method");
+}
+
+// =====================================================
+// CONFIG
+// =====================================================
+
+void processConfig(
+    const JsonDocument &document)
+{
+  bool changed = false;
+
+  if (!document["ledMode"].isNull())
+  {
+    const int value =
+        document["ledMode"].as<int>();
+
+    if (
+        value == 0 ||
+        value == 1)
+    {
+      ledMode =
+          static_cast<uint8_t>(
+              value);
+
+      changed = true;
+    }
+  }
+
+  if (!document["ledState"].isNull())
+  {
+    writeLed(
+        document["ledState"]
+            .as<bool>());
+
+    changed = true;
+  }
+
+  if (!document["pumpState"].isNull())
+  {
+    pumpState =
+        document["pumpState"]
+            .as<bool>();
+
+    changed = true;
+  }
+
+  if (
+      !document["blinkingInterval"]
+           .isNull())
+  {
+    const uint32_t value =
+        document["blinkingInterval"]
+            .as<uint32_t>();
+
+    if (
+        value >=
+            BLINKING_INTERVAL_MS_MIN &&
+        value <=
+            BLINKING_INTERVAL_MS_MAX)
+    {
+      blinkingInterval =
+          static_cast<uint16_t>(
+              value);
+
+      changed = true;
+    }
+  }
+
+  if (changed)
+  {
+    previousStateChange =
+        millis();
+
+    publishDeviceState(true);
+
+    publishAttributes();
+  }
+}
+
+// =====================================================
+// MQTT CALLBACK
+// =====================================================
+
+void mqttCallback(
+    char *topic,
+    byte *payload,
+    unsigned int length)
+{
+  Serial.printf(
+      "[MQTT] Received topic=%s length=%u\n",
+      topic,
+      length);
+
+  if (
+      length >=
+      MQTT_BUFFER_SIZE)
+  {
+    Serial.println(
+        "[MQTT] Incoming payload too large");
+
+    return;
+  }
+
+  char jsonBuffer[MQTT_BUFFER_SIZE];
+
+  memcpy(
+      jsonBuffer,
+      payload,
+      length);
+
+  jsonBuffer[length] =
+      '\0';
+
+  JsonDocument document;
+
+  const DeserializationError error =
+      deserializeJson(
+          document,
+          jsonBuffer);
+
+  if (error)
+  {
+    Serial.print(
+        "[MQTT] JSON error: ");
+
+    Serial.println(
+        error.c_str());
+
+    return;
+  }
+
+  // ===================================================
+  // CONFIG
+  // ===================================================
+
+  if (
+      strcmp(
+          topic,
+          CONFIG_TOPIC) == 0)
+  {
+    processConfig(
+        document);
+
+    return;
+  }
+
+  // ===================================================
+  // COMMAND
+  // ===================================================
+
+  const size_t commandPrefixLength =
+      strlen(COMMAND_PREFIX);
+
+  if (
+      strncmp(
+          topic,
+          COMMAND_PREFIX,
+          commandPrefixLength) == 0)
+  {
+    const char *requestId =
+        topic +
+        commandPrefixLength;
+
+    if (
+        requestId[0] == '\0')
+    {
+      Serial.println(
+          "[MQTT] Missing requestId");
+
+      return;
+    }
+
+    processCommand(
+        requestId,
+        document);
+
+    return;
+  }
+
+  Serial.println(
+      "[MQTT] Unsupported topic");
+}
+
+// =====================================================
+// MQTT CONNECTION
+// =====================================================
+
+bool connectMqtt()
+{
+  if (mqttClient.connected())
+  {
+    return true;
+  }
+
+  Serial.printf(
+      "[TBMQ] Connecting to %s:%u clientId=%s username=%s\n",
+      TBMQ_SERVER,
+      TBMQ_PORT,
+      MQTT_CLIENT_ID,
+      MQTT_USERNAME);
+
+  // ===================================================
+  // LWT
+  // ===================================================
+
+  JsonDocument lwtDocument;
+
+  lwtDocument["deviceName"] =
+      DEVICE_ID;
+
+  lwtDocument["online"] =
+      false;
+
+  char lwtPayload[160];
+
+  serializeJson(
+      lwtDocument,
+      lwtPayload,
+      sizeof(lwtPayload));
+
+  const bool connected =
+      mqttClient.connect(
+          MQTT_CLIENT_ID,
+          MQTT_USERNAME,
+          MQTT_PASSWORD,
+          STATE_TOPIC,
+          1,
+          true,
+          lwtPayload,
+          false);
+
+  if (!connected)
+  {
+    Serial.printf(
+        "[TBMQ] Connection failed, state=%d\n",
+        mqttClient.state());
+
+    return false;
+  }
+
+  Serial.println(
+      "[TBMQ] Connected");
+
+  // Reset claim state
+  claimSentThisConnection =
+      false;
+
+  // ===================================================
+  // Subscribe command
+  // ===================================================
+
+  const bool commandSubscribed =
+      mqttClient.subscribe(
+          COMMAND_SUB_TOPIC,
+          1);
+
+  // ===================================================
+  // Subscribe config
+  // ===================================================
+
+  const bool configSubscribed =
+      mqttClient.subscribe(
+          CONFIG_TOPIC,
+          1);
+
+  Serial.printf(
+      "[TBMQ] Subscribe commands=%s topic=%s\n",
+      commandSubscribed
+          ? "true"
+          : "false",
+      COMMAND_SUB_TOPIC);
+
+  Serial.printf(
+      "[TBMQ] Subscribe config=%s topic=%s\n",
+      configSubscribed
+          ? "true"
+          : "false",
+      CONFIG_TOPIC);
+
+  // ===================================================
+  // Publish online state
+  // ===================================================
+
+  publishDeviceState(true);
+
+  // ===================================================
+  // Publish attributes
+  // ===================================================
+
+  publishAttributes();
+
+  // ===================================================
+  // AUTO CLAIM
+  // ===================================================
+
+  if (AUTO_CLAIM_ON_CONNECT &&
+      !claimSentThisConnection)
+  {
+    publishClaim();
+
+    claimSentThisConnection =
+        true;
+  }
+
+  return commandSubscribed &&
+         configSubscribed;
+}
+
+// =====================================================
+// ENSURE MQTT
+// =====================================================
+
+bool ensureMqttConnected()
+{
+  if (mqttClient.connected())
+  {
+    return true;
+  }
+
+  const uint32_t now =
+      millis();
+
+  if (!intervalElapsed(
+          now,
+          previousMqttReconnect,
+          MQTT_RECONNECT_INTERVAL_MS))
+  {
+    return false;
+  }
+
+  previousMqttReconnect =
+      now;
+
+  return connectMqtt();
+}
+
+// =====================================================
+// LED LOOP
+// =====================================================
+
+void processLedBlink()
+{
+  if (ledMode != 1U)
+  {
+    return;
+  }
+
+  const uint32_t now =
+      millis();
+
+  if (!intervalElapsed(
+          now,
+          previousStateChange,
+          blinkingInterval))
+  {
+    return;
+  }
+
+  previousStateChange =
+      now;
+
+  writeLed(
+      !ledState);
+
+  if (mqttClient.connected())
+  {
+    publishDeviceState(true);
+  }
+}
+
+// =====================================================
+// ARDUINO SETUP
+// =====================================================
+
+void setup()
+{
+  Serial.begin(
+      SERIAL_DEBUG_BAUD);
+
+  pinMode(
+      LED_BUILTIN,
+      OUTPUT);
+
+  writeLed(false);
+
+  delay(1000);
+
+#if defined(ESP32)
+
+  randomSeed(
+      static_cast<uint32_t>(
+          micros()) ^
+      static_cast<uint32_t>(
+          ESP.getEfuseMac()));
+
+#else
+
+  randomSeed(
+      micros());
+
+#endif
+
+  // ===================================================
+  // BUILD TOPICS
+  // ===================================================
+
+  buildTopics();
+
+  // ===================================================
+  // DEBUG
+  // ===================================================
+
+  Serial.println();
+
+  Serial.println(
+      "==============================");
+
+  Serial.println(
+      "ESP32 TBMQ PlatformIO");
+
+  Serial.println(
+      "==============================");
+
+  Serial.printf(
+      "[DEVICE] Device ID: %s\n",
+      DEVICE_ID);
+
+  Serial.printf(
+      "[DEVICE] Serial: %s\n",
+      getDeviceSerial().c_str());
+
+  Serial.printf(
+      "[TOPIC] Telemetry: %s\n",
+      TELEMETRY_TOPIC);
+
+  Serial.printf(
+      "[TOPIC] Attributes: %s\n",
+      ATTRIBUTES_TOPIC);
+
+  Serial.printf(
+      "[TOPIC] Commands: %s\n",
+      COMMAND_SUB_TOPIC);
+
+  Serial.printf(
+      "[TOPIC] Config: %s\n",
+      CONFIG_TOPIC);
+
+  Serial.printf(
+      "[TOPIC] Claim: %s\n",
+      CLAIM_TOPIC);
+
+  // ===================================================
+  // MQTT
+  // ===================================================
+
+  mqttClient.setServer(
+      TBMQ_SERVER,
+      TBMQ_PORT);
+
+  mqttClient.setCallback(
+      mqttCallback);
+
+  mqttClient.setBufferSize(
+      MQTT_BUFFER_SIZE);
+
+  mqttClient.setKeepAlive(
+      30);
+
+  mqttClient.setSocketTimeout(
+      10);
+
+  // ===================================================
+  // WIFI
+  // ===================================================
+
+  connectWiFi();
+}
+
+// =====================================================
+// LOOP
+// =====================================================
+
+void loop()
+{
+  if (!ensureWiFiConnected())
+  {
+    delay(10);
+    return;
+  }
+
+  if (!ensureMqttConnected())
+  {
+    delay(10);
+    return;
+  }
+
+  mqttClient.loop();
+
+  processLedBlink();
+
+  sendPeriodicData();
+
+  delay(10);
+}

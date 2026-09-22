@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { SHADE_COLORS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 const MODES = ["morning", "day", "night"] as const;
+
+export interface LightState {
+  isOn: boolean;
+  mode: (typeof MODES)[number];
+  intensity: number;
+  colorIndex: number;
+}
 
 export function LightControlPanel({
   icon: Icon,
@@ -15,6 +22,7 @@ export function LightControlPanel({
   mode: initialMode = "day",
   intensity: initialIntensity = 50,
   colorIndex: initialColorIndex = 3,
+  onChange,
 }: {
   icon: LucideIcon;
   name: string;
@@ -22,12 +30,17 @@ export function LightControlPanel({
   mode?: (typeof MODES)[number];
   intensity?: number;
   colorIndex?: number;
+  onChange?: (state: LightState) => void;
 }) {
   const [isOn, setIsOn] = useState(initialOn);
   const [mode, setMode] = useState<(typeof MODES)[number]>(initialMode);
   const [intensity, setIntensity] = useState(initialIntensity);
   const [colorIndex, setColorIndex] = useState(initialColorIndex);
   const color = SHADE_COLORS[colorIndex];
+
+  useEffect(() => {
+    onChange?.({ isOn, mode, intensity, colorIndex });
+  }, [isOn, mode, intensity, colorIndex]);
 
   return (
     <div className="flex flex-col gap-6">

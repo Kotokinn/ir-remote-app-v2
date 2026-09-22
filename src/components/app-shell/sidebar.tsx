@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home as HomeIcon } from "lucide-react";
 import { NAV_ITEMS } from "@/components/app-shell/nav-items";
+import { UnreadBadge } from "@/components/app-shell/unread-badge";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
@@ -34,6 +35,7 @@ export function Sidebar() {
             >
               <Icon className="size-5" strokeWidth={active ? 2.4 : 2} />
               {label}
+              {href === "/notifications" && <UnreadBadge className="static ml-auto" />}
             </Link>
           );
         })}
