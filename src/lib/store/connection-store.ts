@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 /** Which path a command actually went out on. */
-export type CommandRoute = "mqtt" | "ble";
+export type CommandRoute = "mqtt" | "ble" | "serial";
 
 export interface CommandOutcome {
   /** null when the command failed on every path. */

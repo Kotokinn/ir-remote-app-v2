@@ -18,7 +18,7 @@ export function startClaim(deviceId: string, name: string): Promise<DeviceRespon
 export function sendCommand(
   deviceId: string,
   method: string,
-  params?: Record<string, unknown>
+  params?: unknown
 ): Promise<CommandAcceptedResponse> {
   return apiPost<CommandAcceptedResponse>(`/api/mqtt/devices/${deviceId}/commands`, { method, params });
 }

@@ -10,12 +10,14 @@ export function ToggleDeviceRow({
   isOn: initialOn,
   hubName,
   onRemove,
+  onChange,
 }: {
   icon: LucideIcon;
   name: string;
   isOn: boolean;
   hubName?: string;
   onRemove?: () => void;
+  onChange?: (isOn: boolean) => void;
 }) {
   const [isOn, setIsOn] = useState(initialOn);
 
@@ -31,7 +33,15 @@ export function ToggleDeviceRow({
           <span className="truncate text-[11px] text-muted-foreground">via {hubName}</span>
         )}
       </div>
-      <Switch checked={isOn} onCheckedChange={setIsOn} />
+      <Switch
+        checked={isOn}
+        onCheckedChange={(next) => {
+          // A Switch flip is always a direct tap, never fired on mount — unlike a slider/time input,
+          // no debounce or "only report real change" guard is needed here.
+          setIsOn(next);
+          onChange?.(next);
+        }}
+      />
       {onRemove && (
         <button
           type="button"

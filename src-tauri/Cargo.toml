@@ -33,6 +33,9 @@ tauri-plugin-fcm = "0.2.0"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# RS485 (desktop only — no serial ports on mobile): smart-control's SmartSwitch relay module,
+# see docs (smart-control repo) "RS485 chi tiết".
+serialport = "4"
 
 [features]
 # by default Tauri runs in production mode

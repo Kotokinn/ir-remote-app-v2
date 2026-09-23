@@ -13,6 +13,30 @@ use device_stream::{
   DeviceStreamState,
 };
 
+// RS485 needs an actual serial port, so it only exists on desktop; mobile gets stubs with the same
+// names/signatures so invoke_handler! below never needs to know which platform it's building for.
+#[cfg(desktop)]
+mod serial_transport;
+#[cfg(desktop)]
+use serial_transport::{list_serial_ports, serial_send_command};
+
+#[cfg(mobile)]
+#[tauri::command]
+fn list_serial_ports() -> Result<Vec<String>, String> {
+  Err("RS485 is desktop-only".into())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+async fn serial_send_command(
+  _port_name: String,
+  _baud: u32,
+  _frame: String,
+  _timeout_ms: u64,
+) -> Result<String, String> {
+  Err("RS485 is desktop-only".into())
+}
+
 #[tauri::command]
 fn greet() -> String {
   let now = SystemTime::now();
@@ -174,7 +198,9 @@ pub fn run() {
       device_stream_start,
       device_stream_stop,
       notification_stream_start,
-      notification_stream_stop
+      notification_stream_stop,
+      list_serial_ports,
+      serial_send_command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

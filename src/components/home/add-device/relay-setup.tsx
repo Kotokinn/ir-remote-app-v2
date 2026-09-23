@@ -1,20 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { Zap } from "lucide-react";
+import { AlertCircle, Zap } from "lucide-react";
 import { CATEGORIES, type CategoryId, type Device } from "@/lib/mock-data";
 import { useRoomsStore } from "@/lib/store/rooms-store";
+import { useHubsStore, getPhysicalDevice } from "@/lib/store/hubs-store";
+import { sendDeviceCommand } from "@/lib/device/device-commands";
 
 interface RelayRow {
   name: string;
   categoryId: CategoryId;
   roomId: string;
   tested: boolean;
+  error: string;
 }
 
 function newDeviceId(index: number) {
   return `dev-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 5)}`;
 }
+
+// Pulses the relay ON then OFF — the module is a latching relay (ADW1212HL, holds its physical
+// position with no power), so a real "test" needs a visible/audible click, not just a state change
+// nothing shows for. Long enough to hear, short enough it doesn't look like the row got left on.
+const TEST_PULSE_MS = 900;
 
 export function RelaySetup({
   roomId,
@@ -26,6 +34,8 @@ export function RelaySetup({
   onDone: (devices: Device[]) => void;
 }) {
   const rooms = useRoomsStore((s) => s.rooms);
+  const physicalDevices = useHubsStore((s) => s.physicalDevices);
+  const hubDeviceId = getPhysicalDevice(physicalDevices, hubId)?.deviceId;
   const defaultRoomId = roomId !== "all" ? roomId : (rooms[0]?.id ?? "");
   const [rows, setRows] = useState<RelayRow[]>(
     Array.from({ length: 8 }, (_, i) => ({
@@ -33,6 +43,7 @@ export function RelaySetup({
       categoryId: "switches",
       roomId: defaultRoomId,
       tested: false,
+      error: "",
     }))
   );
   const [testingIndex, setTestingIndex] = useState<number | null>(null);
@@ -41,12 +52,28 @@ export function RelaySetup({
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   }
 
-  function testRow(index: number) {
+  async function testRow(index: number) {
+    if (!hubDeviceId) {
+      updateRow(index, { error: "This hub isn't paired over the network yet." });
+      return;
+    }
     setTestingIndex(index);
-    setTimeout(() => {
-      setTestingIndex(null);
+    updateRow(index, { error: "" });
+    const relay = index + 1;
+    try {
+      await sendDeviceCommand(hubDeviceId, `setRelay${relay}`, true);
+      await new Promise((resolve) => {
+        setTimeout(resolve, TEST_PULSE_MS);
+      });
+      await sendDeviceCommand(hubDeviceId, `setRelay${relay}`, false);
       updateRow(index, { tested: true });
-    }, 900);
+    } catch (error) {
+      updateRow(index, {
+        error: error instanceof Error ? error.message : "Couldn't reach the relay module.",
+      });
+    } finally {
+      setTestingIndex(null);
+    }
   }
 
   function finish() {
@@ -58,6 +85,7 @@ export function RelaySetup({
       isOn: false,
       kind: "toggle",
       hubId,
+      relayIndex: i + 1,
     }));
     onDone(devices);
   }
@@ -82,13 +110,19 @@ export function RelaySetup({
               />
               <button
                 type="button"
-                onClick={() => { testRow(i); }}
+                onClick={() => { void testRow(i); }}
                 disabled={testingIndex === i}
                 className="h-9 shrink-0 rounded-lg bg-muted px-3 text-xs font-semibold text-foreground/70 disabled:opacity-60"
               >
                 {testingIndex === i ? "…" : row.tested ? "Tested ✓" : "Test"}
               </button>
             </div>
+            {row.error && (
+              <p className="flex items-start gap-1.5 pl-10 text-[11px] text-destructive">
+                <AlertCircle className="mt-0.5 size-3 shrink-0" />
+                {row.error}
+              </p>
+            )}
             <div className="flex gap-2 pl-10">
               <select
                 value={row.categoryId}

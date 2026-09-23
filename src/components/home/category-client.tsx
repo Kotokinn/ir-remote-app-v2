@@ -19,6 +19,7 @@ import { sendDeviceCommand } from "@/lib/device/device-commands";
 import { HubStatusDot, HubTemperatureReadout } from "@/components/home/hub-live-status";
 import { buildRgbCommands, buildSendAcCommand, buildSetSleepModeCommand } from "@/lib/device/commands";
 import { removeAlarmFromHub, syncAlarmToHub } from "@/lib/device/alarm-sync";
+import { TransportPicker } from "@/components/home/transport-picker";
 
 export function CategoryClient({
   roomId,
@@ -41,6 +42,13 @@ export function CategoryClient({
   const [alarmSyncError, setAlarmSyncError] = useState<string | null>(null);
   const selectedDevice = devices.find((d) => d.id === selectedId) ?? devices[0];
   const allToggle = devices.every((d) => d.kind === "toggle");
+  // Connection method is a per-hub setting; only offer it here when every device on screen is
+  // wired to the same one hub (the common case for a dedicated relay module's Switches screen) —
+  // ambiguous otherwise, so the picker just doesn't show rather than guessing which hub it means.
+  const commonHub =
+    devices.length > 0 && devices.every((d) => d.hubId === devices[0].hubId)
+      ? getPhysicalDevice(physicalDevices, devices[0].hubId)
+      : undefined;
 
   if (!category) {
     return (
@@ -88,6 +96,18 @@ export function CategoryClient({
     );
   }
 
+  function handleToggleChange(device: Device, isOn: boolean) {
+    updateDevice(device.id, { isOn });
+    const deviceId = realDeviceIdFor(device);
+    // relayIndex is only set for a relay8-backed toggle; a plain decorative toggle stays UI-only.
+    if (!deviceId || !device.relayIndex) return;
+    sendDeviceCommand(deviceId, `setRelay${device.relayIndex}`, isOn).catch(
+      (error: unknown) => {
+        console.error("[toggle] setRelay failed", error);
+      }
+    );
+  }
+
   function handleAlarmChange(device: Device, state: AlarmState) {
     setAlarmSyncError(null);
     const updated = { ...device, ...state };
@@ -126,6 +146,7 @@ export function CategoryClient({
           <ChevronLeft className="size-5" />
         </button>
         <h1 className="flex-1 truncate text-lg font-semibold">{category.name}</h1>
+        {commonHub && <TransportPicker hub={commonHub} />}
         <Link
           href={`/home/add-device?room=${roomId}`}
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/70"
@@ -156,6 +177,9 @@ export function CategoryClient({
               hubName={hubNameFor(device)}
               onRemove={() => {
                 setDeleteTarget(device);
+              }}
+              onChange={(isOn) => {
+                handleToggleChange(device, isOn);
               }}
             />
           ))}
@@ -247,6 +271,9 @@ export function CategoryClient({
                 name={selectedDevice.name}
                 isOn={selectedDevice.isOn}
                 hubName={hubNameFor(selectedDevice)}
+                onChange={(isOn) => {
+                  handleToggleChange(selectedDevice, isOn);
+                }}
               />
             )}
             {selectedDevice.kind === "rgb" && (

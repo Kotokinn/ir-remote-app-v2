@@ -70,6 +70,9 @@ export interface Device {
   kind: DeviceKind;
   /** Physical hub/module (PhysicalDevice.id) this virtual device is derived from, if any. */
   hubId?: string;
+  // toggle (kind: "toggle") backed by a relay8/SmartSwitch hub — its channel, 1-8 (setRelay's
+  // `relay` param). Unset for a plain toggle that isn't wired to a real relay.
+  relayIndex?: number;
   // light (kind: "light")
   mode?: "morning" | "day" | "night";
   intensity?: number;

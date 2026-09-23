@@ -12,6 +12,7 @@
 //    provisionWifi), so we never wait for a command response over BLE.
 import { sendString } from "@mnlphlp/plugin-blec";
 import { useConnectionStore } from "@/lib/store/connection-store";
+import { commandRequestTopic } from "@/lib/device/device-profile";
 import {
   HUB_CHARACTERISTIC_UUID,
   HUB_SERVICE_UUID,
@@ -20,10 +21,6 @@ import {
   scanForHubs,
 } from "@/lib/device/ble-provisioning";
 
-// Must match the firmware constants (docs/MQTT_API.md "Định danh thiết bị") and mqtt-service's
-// mqtt.device.* defaults.
-const TENANT_ID = "tenant-001";
-const DEVICE_PROFILE = "SmartIrHub";
 const SCAN_MS = 4000;
 
 let connectedDeviceId: string | null = null;
@@ -68,12 +65,12 @@ async function ensureConnected(deviceId: string): Promise<void> {
 export function sendCommandOverBle(
   deviceId: string,
   method: string,
-  params?: Record<string, unknown>
+  params?: unknown
 ): Promise<void> {
   return serialized(async () => {
     const attempt = async () => {
       await ensureConnected(deviceId);
-      const topic = `v1/tenants/${TENANT_ID}/devices/${DEVICE_PROFILE}/${deviceId}/commands/request/${newRequestId()}`;
+      const topic = commandRequestTopic(deviceId, newRequestId());
       const payload = JSON.stringify({ method, params });
       await sendString(HUB_CHARACTERISTIC_UUID, `${topic}|${payload}`, "withoutResponse", HUB_SERVICE_UUID);
     };
