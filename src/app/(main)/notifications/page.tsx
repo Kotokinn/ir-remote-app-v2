@@ -6,6 +6,7 @@ import { useNotificationsStore } from "@/lib/store/notifications-store";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import { SwipeToDelete } from "@/components/notifications/swipe-to-delete";
+import { OtaBanners } from "@/components/notifications/ota-banner";
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
   device_offline: Radio,
@@ -52,6 +53,8 @@ export default function NotificationsPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
       <h1 className="text-2xl font-bold">Notifications</h1>
+
+      <OtaBanners />
 
       {loadFailed && (
         <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">

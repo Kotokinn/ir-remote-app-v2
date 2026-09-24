@@ -80,7 +80,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
                   key={option.id}
                   type="button"
                   onClick={() => {
-                    updatePhysicalDevice(hub.id, { preferredTransport: option.id });
+                    void updatePhysicalDevice(hub.id, { preferredTransport: option.id });
                   }}
                   className={cn(
                     "flex items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
@@ -127,7 +127,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
               <select
                 value={hub.serialPort ?? ""}
                 onChange={(e) => {
-                  updatePhysicalDevice(hub.id, { serialPort: e.target.value || undefined });
+                  void updatePhysicalDevice(hub.id, { serialPort: e.target.value || undefined });
                 }}
                 className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none"
               >

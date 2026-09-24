@@ -40,9 +40,21 @@ export function BleProvisioning({
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [name, setName] = useState(PRODUCT_LABEL[product]);
+  // A second relay8/hub-ir left at its default name is indistinguishable from the first in every
+  // list that shows "via {hubName}" (category-client.tsx's Switches screen, etc.) — number it so
+  // the two are told apart even if the user never bothers to rename it here.
+  const existingOfSameProduct = useHubsStore(
+    (s) => s.physicalDevices.filter((d) => d.productType === product).length
+  );
+  const defaultName =
+    existingOfSameProduct > 0
+      ? `${PRODUCT_LABEL[product]} ${existingOfSameProduct + 1}`
+      : PRODUCT_LABEL[product];
+  const [name, setName] = useState(defaultName);
   const [errorMessage, setErrorMessage] = useState("");
   const [wifiError, setWifiError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const Icon = product === "hub-ir" ? Radio : Zap;
 
@@ -104,7 +116,7 @@ export function BleProvisioning({
       // onto the new network; its real deviceId is its advertised name.
       setDeviceId(picked.name);
       setStep("claiming");
-      await startClaim(picked.name, name.trim() || PRODUCT_LABEL[product]);
+      await startClaim(picked.name, name.trim() || defaultName);
       setStep("name");
     } catch (error) {
       if (error instanceof ApiError && error.status === 408) {
@@ -122,15 +134,23 @@ export function BleProvisioning({
     }
   }
 
-  function finish() {
-    if (!deviceId) return;
-    const created = addPhysicalDevice({
-      name: name.trim() || PRODUCT_LABEL[product],
-      roomId,
-      productType: product,
-      deviceId,
-    });
-    onComplete(created);
+  async function finish() {
+    if (!deviceId || saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const created = await addPhysicalDevice({
+        name: name.trim() || defaultName,
+        roomId,
+        productType: product,
+        deviceId,
+      });
+      onComplete(created);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Couldn't save the device. Try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (step === "scanning") {
@@ -290,12 +310,16 @@ export function BleProvisioning({
         onChange={(e) => { setName(e.target.value); }}
         className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
       />
+      {saveError && <p className="text-center text-xs text-destructive">{saveError}</p>}
       <button
         type="button"
-        onClick={finish}
-        className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
+        onClick={() => {
+          void finish();
+        }}
+        disabled={saving}
+        className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
       >
-        Continue
+        {saving ? "Saving…" : "Continue"}
       </button>
     </div>
   );

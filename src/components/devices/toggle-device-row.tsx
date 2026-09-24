@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { Trash2, type LucideIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export function ToggleDeviceRow({
   icon: Icon,
   name,
-  isOn: initialOn,
+  isOn,
   hubName,
+  disabled,
   onRemove,
   onChange,
 }: {
@@ -16,11 +16,11 @@ export function ToggleDeviceRow({
   name: string;
   isOn: boolean;
   hubName?: string;
+  /** Locked briefly after a tap so a spam-tap can't fire another command before the last one settles. */
+  disabled?: boolean;
   onRemove?: () => void;
   onChange?: (isOn: boolean) => void;
 }) {
-  const [isOn, setIsOn] = useState(initialOn);
-
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border">
       <Icon
@@ -35,10 +35,8 @@ export function ToggleDeviceRow({
       </div>
       <Switch
         checked={isOn}
+        disabled={disabled}
         onCheckedChange={(next) => {
-          // A Switch flip is always a direct tap, never fired on mount — unlike a slider/time input,
-          // no debounce or "only report real change" guard is needed here.
-          setIsOn(next);
           onChange?.(next);
         }}
       />

@@ -5,6 +5,13 @@ import { API_BASE_URL } from "@/lib/api/config";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDeviceStateStore } from "@/lib/store/device-state-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
+import { useOtaStore, type OtaEventType } from "@/lib/store/ota-store";
+
+const OTA_EVENT_TYPES: readonly OtaEventType[] = ["firmwareAvailable", "otaStarted", "otaSuccess", "otaFailed"];
+
+function isOtaEventType(value: unknown): value is OtaEventType {
+  return typeof value === "string" && (OTA_EVENT_TYPES as readonly string[]).includes(value);
+}
 
 interface DeviceEventPayload {
   event: string;
@@ -74,6 +81,24 @@ function applyEvent(deviceId: string, payload: DeviceEventPayload) {
     case "broker":
       store.setBroker(deviceId, (parsed as Record<string, unknown>).connected === true);
       break;
+    case "events": {
+      // smart-control's publishOtaEvent() (main.cpp): {type, currentVersion, newVersion, title}.
+      const event = parsed as Record<string, unknown>;
+      if (
+        isOtaEventType(event.type) &&
+        typeof event.currentVersion === "string" &&
+        typeof event.newVersion === "string" &&
+        typeof event.title === "string"
+      ) {
+        useOtaStore.getState().setEvent(deviceId, {
+          type: event.type,
+          currentVersion: event.currentVersion,
+          newVersion: event.newVersion,
+          title: event.title,
+        });
+      }
+      break;
+    }
     default:
       break;
   }

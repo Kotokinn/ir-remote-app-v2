@@ -13,6 +13,7 @@ import {
   Lock,
   Bell,
   UserRound,
+  Users,
   ShieldQuestion,
   RefreshCw,
   LifeBuoy,
@@ -70,6 +71,13 @@ export interface Device {
   kind: DeviceKind;
   /** Physical hub/module (PhysicalDevice.id) this virtual device is derived from, if any. */
   hubId?: string;
+  // Household sharing — set by the server, absent on a device that was just built locally.
+  /** Whose device it is (not the signed-in account's, for one shared with them). */
+  ownerAccountId?: number;
+  /** How the signed-in account reaches it: owns it, was given its room, or was given just this device. */
+  access?: "owner" | "room" | "device";
+  /** May rename/delete it: the owner always, a room member only for devices they added. Undefined = yes. */
+  canEdit?: boolean;
   // toggle (kind: "toggle") backed by a relay8/SmartSwitch hub — its channel, 1-8 (setRelay's
   // `relay` param). Unset for a plain toggle that isn't wired to a real relay.
   relayIndex?: number;
@@ -210,6 +218,7 @@ export interface SettingsItem {
 export const SETTINGS_ITEMS: SettingsItem[] = [
   { id: "new-brands", label: "New brands", icon: Bell },
   { id: "profile", label: "Profile", icon: UserRound },
+  { id: "household", label: "Household", icon: Users },
   { id: "account", label: "Account", icon: ShieldQuestion },
   { id: "sync-options", label: "Sync options", icon: RefreshCw },
   { id: "support", label: "Support", icon: LifeBuoy },

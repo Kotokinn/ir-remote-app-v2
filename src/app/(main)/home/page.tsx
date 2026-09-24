@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Home as HomeIcon, Plus } from "lucide-react";
+import { Home as HomeIcon, Plus, Users } from "lucide-react";
 import { getRoomIcon } from "@/lib/room-icons";
 import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
+import { SHARED_ROOM_ID } from "@/lib/sharing";
 import { AddRoomDialog } from "@/components/home/add-room-dialog";
 import { RoomTemperatureChip } from "@/components/home/hub-live-status";
 
@@ -16,6 +17,8 @@ export default function MyHomePage() {
   const fetchRooms = useRoomsStore((s) => s.fetchRooms);
   const devices = useDevicesStore((s) => s.devices);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Devices shared one by one have no room of the viewer's own to sit in — they gather here.
+  const sharedDeviceCount = devices.filter((d) => d.roomId === SHARED_ROOM_ID).length;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
@@ -57,7 +60,7 @@ export default function MyHomePage() {
             Retry
           </button>
         </div>
-      ) : rooms.length === 0 ? (
+      ) : rooms.length === 0 && sharedDeviceCount === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-14 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-accent text-primary">
             <HomeIcon className="size-6" />
@@ -92,10 +95,25 @@ export default function MyHomePage() {
                 <span className="text-xs text-muted-foreground">
                   {deviceCount} devices
                 </span>
+                {room.access === "room" && (
+                  <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-primary">
+                    Shared with you
+                  </span>
+                )}
                 <RoomTemperatureChip roomId={room.id} variant="inline" />
               </Link>
             );
           })}
+          {sharedDeviceCount > 0 && (
+            <Link
+              href={`/home/room?id=${SHARED_ROOM_ID}`}
+              className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
+            >
+              <Users className="size-8 text-primary" strokeWidth={1.6} />
+              <span className="text-sm font-medium">Shared with me</span>
+              <span className="text-xs text-muted-foreground">{sharedDeviceCount} devices</span>
+            </Link>
+          )}
         </div>
       )}
 

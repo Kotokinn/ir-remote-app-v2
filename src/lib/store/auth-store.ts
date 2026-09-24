@@ -78,7 +78,15 @@ export const useAuthStore = create<AuthState>()(
         return response.accessToken;
       },
       logout: () => {
+        // Clear local session immediately regardless of the network — the user is logged out from
+        // this device's point of view either way, and AuthGuard sends them to /login off this.
+        const currentRefreshToken = get().refreshToken;
         set({ accessToken: null, refreshToken: null, account: null });
+        if (currentRefreshToken) {
+          authApi.logout(currentRefreshToken).catch((error: unknown) => {
+            console.warn("[auth] server-side logout failed (session is still cleared locally)", error);
+          });
+        }
       },
     }),
     {

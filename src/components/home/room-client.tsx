@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Home as HomeIcon, Radio, Trash2, Zap } from "lucide-react";
+import { ChevronLeft, Home as HomeIcon, Radio, Trash2, Users, Zap } from "lucide-react";
 import { roomCategories } from "@/lib/mock-data";
+import { SHARED_ROOM_ID, mayEdit } from "@/lib/sharing";
 import { getRoomIcon } from "@/lib/room-icons";
 import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
@@ -27,7 +28,9 @@ export function RoomClient({ roomId }: { roomId: string }) {
   const room =
     roomId === "all"
       ? { id: "all", name: "All Devices", icon: HomeIcon, color: "text-primary" }
-      : userRoom
+      : roomId === SHARED_ROOM_ID
+        ? { id: SHARED_ROOM_ID, name: "Shared with me", icon: Users, color: "text-primary" }
+        : userRoom
         ? { id: userRoom.id, name: userRoom.name, icon: getRoomIcon(userRoom.iconKey), color: userRoom.color }
         : undefined;
 
@@ -125,16 +128,18 @@ export function RoomClient({ roomId }: { roomId: string }) {
                 </button>
                 <HubTemperature hub={hub} />
                 <HubConnectivityIcon hub={hub} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteTarget(hub);
-                  }}
-                  aria-label={`Remove ${hub.name}`}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                {mayEdit(hub) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteTarget(hub);
+                    }}
+                    aria-label={`Remove ${hub.name}`}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -164,7 +169,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
         onConfirm={() => {
           if (!deleteTarget) return;
           removeDevicesByHub(deleteTarget.id);
-          removePhysicalDevice(deleteTarget.id);
+          void removePhysicalDevice(deleteTarget.id);
         }}
       />
     </div>

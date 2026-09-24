@@ -3,13 +3,17 @@
 import { create } from "zustand";
 import { ROOM_COLOR_OPTIONS, type RoomIconKey } from "@/lib/room-icons";
 import { ApiError } from "@/lib/api/auth";
-import { roomsApi, type RoomResponse } from "@/lib/api/smart";
+import { roomsApi, type AccessLevel, type RoomResponse } from "@/lib/api/smart";
 
 export interface UserRoom {
   id: string;
   name: string;
   iconKey: RoomIconKey;
   color: string;
+  /** Whose room it is (not the signed-in account's, for one shared with them). */
+  ownerAccountId: number;
+  /** "owner", or "room" when the owner shared this room with the signed-in account. */
+  access: AccessLevel;
 }
 
 interface RoomsState {
@@ -28,6 +32,8 @@ function fromResponse(response: RoomResponse): UserRoom {
     name: response.name,
     iconKey: response.iconKey as RoomIconKey,
     color: response.color,
+    ownerAccountId: response.ownerAccountId,
+    access: response.access,
   };
 }
 

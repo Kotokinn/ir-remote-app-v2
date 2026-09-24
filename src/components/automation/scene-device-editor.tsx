@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Lightbulb } from "lucide-react";
 import { useDevicesStore } from "@/lib/store/devices-store";
+import { mayConfigure } from "@/lib/sharing";
 import { useRoomsStore } from "@/lib/store/rooms-store";
 import { getCategory, SHADE_COLORS, type Device, type DeviceKind, type SceneAction } from "@/lib/mock-data";
 import { LightControlPanel, type LightState } from "@/components/devices/light-control-panel";
@@ -120,8 +121,9 @@ export function SceneDeviceEditor({
   initialActions: SceneAction[];
   onActionsChange: (actions: SceneAction[]) => void;
 }) {
-  const devices = useDevicesStore((s) => s.devices).filter((d) =>
-    ELIGIBLE_KINDS.includes(d.kind)
+  // A device shared for control only can't be put in an automation (the server refuses it too).
+  const devices = useDevicesStore((s) => s.devices).filter(
+    (d) => ELIGIBLE_KINDS.includes(d.kind) && mayConfigure(d)
   );
   const rooms = useRoomsStore((s) => s.rooms);
   const [patches, setPatches] = useState<Map<string, Patch>>(() => {

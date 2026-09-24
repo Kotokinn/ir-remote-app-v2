@@ -59,9 +59,27 @@ export function AddDeviceFlow({
     router.push(`/home/room?id=${roomId}`);
   }
 
+  // Creating a device needs the server (it assigns the real id), so saving can fail or take a moment:
+  // stay on the step and say so instead of navigating away as if it had worked.
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  async function saveThenLeave(save: () => Promise<unknown>) {
+    if (saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await save();
+      finishToRoom();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Couldn't save. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleDone(device: Device) {
-    addDevice(device);
-    finishToRoom();
+    void saveThenLeave(() => addDevice(device));
   }
 
   return (
@@ -77,6 +95,11 @@ export function AddDeviceFlow({
           <X className="size-5" />
         </button>
       </div>
+
+      {saving && <p className="text-center text-xs text-muted-foreground">Saving…</p>}
+      {saveError && (
+        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{saveError}</p>
+      )}
 
       {step.name === "product" && (
         <ProductPicker
@@ -162,8 +185,7 @@ export function AddDeviceFlow({
           roomId={roomId}
           hubId={step.physicalId}
           onDone={(devices) => {
-            addDevices(devices);
-            finishToRoom();
+            void saveThenLeave(() => addDevices(devices));
           }}
         />
       )}

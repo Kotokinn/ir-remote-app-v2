@@ -23,9 +23,19 @@ export function DataHydrator() {
     void useHubsStore.persist.rehydrate();
   }, []);
 
+  // The local caches belong to whoever was signed in: with sharing, the next account to sign in on this
+  // machine must not flash (or, offline, keep) the previous one's rooms and devices.
+  useEffect(() => {
+    if (!authHydrated || accessToken) return;
+    useHubsStore.setState({ physicalDevices: [] });
+    useDevicesStore.setState({ devices: [] });
+  }, [authHydrated, accessToken]);
+
   useEffect(() => {
     if (!authHydrated || !accessToken) return;
     void useRoomsStore.getState().fetchRooms();
+    void useHubsStore.getState().fetchHubs();
+    void useDevicesStore.getState().fetchDevices();
     void useScenesStore.getState().fetchScenes();
     void useSchedulesStore.getState().fetchSchedules();
     void useNotificationsStore.getState().fetchNotifications();

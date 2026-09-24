@@ -59,3 +59,7 @@ export function loginWithGoogle(idToken: string): Promise<AuthResponse> {
 export function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
   return post<AuthResponse>("/api/auth/refresh", { refreshToken: refreshTokenValue });
 }
+
+export function logout(refreshTokenValue: string): Promise<void> {
+  return post<void>("/api/auth/logout", { refreshToken: refreshTokenValue });
+}

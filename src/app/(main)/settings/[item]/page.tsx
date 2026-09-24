@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/app-shell/page-header";
 import { SETTINGS_ITEMS } from "@/lib/mock-data";
 
+// "household" has its own real page (settings/household); this placeholder is for the rest.
 export function generateStaticParams() {
-  return SETTINGS_ITEMS.map((item) => ({ item: item.id }));
+  return SETTINGS_ITEMS.filter((item) => item.id !== "household").map((item) => ({ item: item.id }));
 }
 
 export default async function SettingsItemPage({
