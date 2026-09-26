@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, Lightbulb } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { mayConfigure } from "@/lib/sharing";
 import { useRoomsStore } from "@/lib/store/rooms-store";
@@ -55,6 +56,7 @@ function DeviceEditor({
   patch: Patch;
   onChange: (patch: Patch) => void;
 }) {
+  const { t } = useTranslation();
   if (device.kind === "light") {
     const category = getCategory(device.categoryId);
     return (
@@ -103,7 +105,7 @@ function DeviceEditor({
   }
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">Turn on</span>
+      <span className="text-sm text-muted-foreground">{t("sceneEditor.turnOn")}</span>
       <Switch
         checked={patch.isOn ?? true}
         onCheckedChange={(v) => {
@@ -121,6 +123,7 @@ export function SceneDeviceEditor({
   initialActions: SceneAction[];
   onActionsChange: (actions: SceneAction[]) => void;
 }) {
+  const { t } = useTranslation();
   // A device shared for control only can't be put in an automation (the server refuses it too).
   const devices = useDevicesStore((s) => s.devices).filter(
     (d) => ELIGIBLE_KINDS.includes(d.kind) && mayConfigure(d)
@@ -153,14 +156,14 @@ export function SceneDeviceEditor({
   }
 
   function roomName(roomId: string) {
-    if (roomId === "all") return "All Devices";
-    return rooms.find((r) => r.id === roomId)?.name ?? "Unknown room";
+    if (roomId === "all") return t("home.allDevices");
+    return rooms.find((r) => r.id === roomId)?.name ?? t("room.unknown");
   }
 
   if (devices.length === 0) {
     return (
       <p className="px-1 text-sm text-muted-foreground">
-        No eligible devices yet — add a light, AC, RGB light, or switch first.
+        {t("sceneEditor.noEligible")}
       </p>
     );
   }
@@ -201,7 +204,7 @@ export function SceneDeviceEditor({
                         setExpandedId(expanded ? null : device.id);
                       }}
                       className="text-muted-foreground"
-                      aria-label={expanded ? "Collapse" : "Expand"}
+                      aria-label={expanded ? t("sceneEditor.collapse") : t("sceneEditor.expand")}
                     >
                       <ChevronDown
                         className={cn("size-4 transition-transform", expanded && "rotate-180")}

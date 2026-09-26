@@ -2,9 +2,11 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { ApiError } from "@/lib/api/auth";
 import { devicesApi, toWirePatch, type DeviceResponse } from "@/lib/api/smart";
 import type { Device } from "@/lib/mock-data";
+import { pendingByKey, recentlySyncedKind } from "@/lib/sync/outbox-store";
+import { enqueueSync } from "@/lib/sync/queue";
+import { applyWirePatch, reconcile } from "@/lib/sync/reconcile";
 
 function fromResponse(response: DeviceResponse): Device {
   // The server-owned bookkeeping fields aren't part of the app's Device.
@@ -37,9 +39,9 @@ interface DevicesState {
   addDevice: (device: Device) => Promise<Device>;
   /** One at a time so ids come back in order; those created before a failure stay added, then it rejects. */
   addDevices: (devices: Device[]) => Promise<Device[]>;
-  /** Local change applies at once; the server save runs behind it and never rejects (failure is logged). */
+  /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
   updateDevice: (id: string, patch: Partial<Device>) => Promise<void>;
-  /** Local change applies at once; the server save runs behind it and never rejects (failure is logged). */
+  /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
   removeDevice: (id: string) => Promise<void>;
   /** Local only: the server deletes a hub's devices together with the hub (see removePhysicalDevice). */
   removeDevicesByHub: (hubId: string) => void;
@@ -52,8 +54,17 @@ export const useDevicesStore = create<DevicesState>()(
       hydrated: false,
       fetchDevices: async () => {
         try {
-          const devices = await devicesApi.list();
-          set({ devices: devices.map(fromResponse) });
+          const server = (await devicesApi.list()).map(fromResponse);
+          set((state) => ({
+            // Not a plain replace: changes still waiting in the sync queue must survive the fetch.
+            devices: reconcile(
+              server,
+              state.devices,
+              pendingByKey("device"),
+              (key) => recentlySyncedKind("device", key),
+              applyWirePatch
+            ),
+          }));
         } catch (error) {
           console.error("[devices] refresh failed, keeping the cached list", error);
         }
@@ -70,25 +81,25 @@ export const useDevicesStore = create<DevicesState>()(
         }
         return created;
       },
-      updateDevice: async (id, patch) => {
+      updateDevice: (id, patch) => {
         set((state) => ({
           devices: state.devices.map((d) => (d.id === id ? { ...d, ...patch } : d)),
         }));
-        try {
-          await devicesApi.patch(Number(id), toWirePatch(patch));
-        } catch (error) {
-          console.error("[devices] update failed", error);
-        }
+        const device = get().devices.find((d) => d.id === id);
+        enqueueSync({
+          entity: "device",
+          kind: "patch",
+          key: id,
+          label: device?.name ?? "device",
+          payload: toWirePatch(patch),
+        });
+        return Promise.resolve();
       },
-      removeDevice: async (id) => {
+      removeDevice: (id) => {
+        const device = get().devices.find((d) => d.id === id);
         set((state) => ({ devices: state.devices.filter((d) => d.id !== id) }));
-        try {
-          await devicesApi.remove(Number(id));
-        } catch (error) {
-          // 404 = already gone (e.g. removed from another device): the outcome the user wanted.
-          if (error instanceof ApiError && error.status === 404) return;
-          console.error("[devices] delete failed", error);
-        }
+        enqueueSync({ entity: "device", kind: "delete", key: id, label: device?.name ?? "device" });
+        return Promise.resolve();
       },
       removeDevicesByHub: (hubId) =>
         set((state) => ({ devices: state.devices.filter((d) => d.hubId !== hubId) })),

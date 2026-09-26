@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { runsInApp } from "@/lib/platform";
 import { parseInviteCode } from "@/lib/sharing";
 
 /**
@@ -14,6 +15,8 @@ export function JoinLinkListener() {
   const router = useRouter();
 
   useEffect(() => {
+    // Deep links are an installed-app thing; in a browser the invite code arrives as ?code= on the Household page.
+    if (!runsInApp()) return;
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 

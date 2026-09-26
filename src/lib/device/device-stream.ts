@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { startClaim } from "@/lib/api/mqtt";
+import { runsInApp } from "@/lib/platform";
+import { startSse } from "@/lib/sse";
 import { API_BASE_URL } from "@/lib/api/config";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDeviceStateStore } from "@/lib/store/device-state-store";
@@ -19,6 +21,8 @@ interface DeviceEventPayload {
 }
 
 const activeUnlisten = new Map<string, UnlistenFn>();
+// The browser build reads the stream itself (see lib/sse.ts) instead of through the Rust side.
+const webStops = new Map<string, () => void>();
 
 const RECLAIM_COOLDOWN_MS = 60_000;
 const lastReclaimAt = new Map<string, number>();
@@ -104,12 +108,29 @@ function applyEvent(deviceId: string, payload: DeviceEventPayload) {
   }
 }
 
-/** Starts the Rust-side SSE listener for one device and wires it into device-state-store. */
+/**
+ * Starts the live stream for one device and wires it into device-state-store: the Rust-side SSE listener in
+ * the installed app, a fetch-based reader in the browser.
+ */
 export async function startDeviceStream(deviceId: string): Promise<void> {
   await stopDeviceStream(deviceId);
 
   const token = useAuthStore.getState().accessToken;
   if (!token) throw new Error("Not signed in");
+
+  if (!runsInApp()) {
+    webStops.set(
+      deviceId,
+      startSse(
+        `${API_BASE_URL}/api/mqtt/devices/${deviceId}/stream`,
+        () => useAuthStore.getState().accessToken,
+        (event) => {
+          applyEvent(deviceId, event);
+        }
+      )
+    );
+    return;
+  }
 
   const eventName = `device-event:${deviceId}`;
   const unlisten = await listen<DeviceEventPayload>(eventName, (event) => {
@@ -121,6 +142,9 @@ export async function startDeviceStream(deviceId: string): Promise<void> {
 }
 
 export async function stopDeviceStream(deviceId: string): Promise<void> {
+  webStops.get(deviceId)?.();
+  webStops.delete(deviceId);
+  if (!runsInApp()) return;
   const unlisten = activeUnlisten.get(deviceId);
   if (unlisten) {
     unlisten();

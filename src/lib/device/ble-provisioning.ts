@@ -2,6 +2,7 @@
 // write and notify, frame format `<topic>|<payload_json>` as plain UTF-8 text. The device's
 // advertised name IS its real deviceId (12 hex from eFuse MAC) — that's how we learn the
 // deviceId to hand off to mqtt-service's claim flow afterward.
+import { t } from "@/lib/i18n";
 import { connect, disconnect, getScanningUpdates, listServices, sendString, startScan, subscribeString, unsubscribe } from "@mnlphlp/plugin-blec";
 
 function sleep(ms: number): Promise<void> {
@@ -89,7 +90,7 @@ export async function connectToHub(address: string, onDisconnect?: () => void): 
   // (listServices resolves to an error string rather than throwing on failure.)
   const services = await listServices(address);
   if (typeof services === "string") {
-    throw new Error(`Failed to discover BLE services: ${services}`);
+    throw new Error(t("errors.bleServices", { services }));
   }
   await sleep(200);
 }

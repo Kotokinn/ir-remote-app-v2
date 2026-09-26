@@ -6,8 +6,11 @@ import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
 import { useScenesStore } from "@/lib/store/scenes-store";
+import { useProfileStore } from "@/lib/store/profile-store";
 import { useSchedulesStore } from "@/lib/store/schedules-store";
 import { useNotificationsStore } from "@/lib/store/notifications-store";
+import { useOutboxStore } from "@/lib/sync/outbox-store";
+import { syncEngine } from "@/lib/sync";
 import { startDeviceStream, stopDeviceStream } from "@/lib/device/device-stream";
 import { registerForPush } from "@/lib/device/push";
 import { startNotificationStream, stopNotificationStream } from "@/lib/notification-stream";
@@ -15,12 +18,18 @@ import { startNotificationStream, stopNotificationStream } from "@/lib/notificat
 export function DataHydrator() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const authHydrated = useAuthStore((s) => s.hydrated);
+  const accountId = useAuthStore((s) => s.account?.id ?? null);
   const physicalDevices = useHubsStore((s) => s.physicalDevices);
 
   useEffect(() => {
     void useAuthStore.persist.rehydrate();
     void useDevicesStore.persist.rehydrate();
     void useHubsStore.persist.rehydrate();
+    void useRoomsStore.persist.rehydrate();
+    void useScenesStore.persist.rehydrate();
+    void useSchedulesStore.persist.rehydrate();
+    void useOutboxStore.persist.rehydrate();
+    void useProfileStore.persist.rehydrate();
   }, []);
 
   // The local caches belong to whoever was signed in: with sharing, the next account to sign in on this
@@ -29,6 +38,19 @@ export function DataHydrator() {
     if (!authHydrated || accessToken) return;
     useHubsStore.setState({ physicalDevices: [] });
     useDevicesStore.setState({ devices: [] });
+    useRoomsStore.setState({ rooms: [], hydrated: false });
+    useScenesStore.setState({ scenes: [] });
+    useSchedulesStore.setState({ schedules: [] });
+    useProfileStore.getState().clear();
+    // The outbox is deliberately kept: it may hold changes not yet sent, and it never replays under a
+    // different account (see the engine) — sign-out with pending changes is guarded in Settings.
+  }, [authHydrated, accessToken]);
+
+  // Delivers queued changes to the server whenever it can: now, when back online, when the app returns to
+  // the foreground, and on a timer (see sync-engine.ts). Runs only with a session.
+  useEffect(() => {
+    if (!authHydrated || !accessToken) return;
+    return syncEngine.start();
   }, [authHydrated, accessToken]);
 
   useEffect(() => {
@@ -40,6 +62,11 @@ export function DataHydrator() {
     void useSchedulesStore.getState().fetchSchedules();
     void useNotificationsStore.getState().fetchNotifications();
   }, [authHydrated, accessToken]);
+
+  useEffect(() => {
+    if (!authHydrated || accountId === null) return;
+    void useProfileStore.getState().fetchProfile(accountId);
+  }, [authHydrated, accountId]);
 
   // Push token → backend, once per sign-in. Keyed on "signed in" rather than the token itself so a
   // token refresh doesn't re-prompt or re-register.

@@ -1,6 +1,7 @@
 "use client";
 
 import { Wifi, WifiOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Sheet,
   SheetContent,
@@ -22,12 +23,13 @@ export function PhysicalDeviceSheet({
   physicalDevice: PhysicalDevice | undefined;
   devices: Device[];
 }) {
+  const { t } = useTranslation();
   const rooms = useRoomsStore((s) => s.rooms);
   const childDevices = devices.filter((d) => d.hubId === physicalDevice?.id);
 
   function roomName(roomId: string) {
-    if (roomId === "all") return "All Devices";
-    return rooms.find((r) => r.id === roomId)?.name ?? "Unknown room";
+    if (roomId === "all") return t("home.allDevices");
+    return rooms.find((r) => r.id === roomId)?.name ?? t("room.unknown");
   }
 
   return (
@@ -46,7 +48,7 @@ export function PhysicalDeviceSheet({
 
         <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
           {childDevices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No channels configured.</p>
+            <p className="text-sm text-muted-foreground">{t("room.noChannels")}</p>
           ) : (
             childDevices.map((device) => {
               const category = getCategory(device.categoryId);
@@ -61,7 +63,7 @@ export function PhysicalDeviceSheet({
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">{device.name}</span>
                     <span className="truncate text-xs text-muted-foreground">
-                      {roomName(device.roomId)} · {category?.name}
+                      {roomName(device.roomId)} · {category ? t(category.nameKey) : ""}
                     </span>
                   </div>
                 </div>

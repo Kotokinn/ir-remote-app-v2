@@ -36,7 +36,8 @@ export interface RoomResponse {
 }
 
 export interface SceneResponse {
-  id: number;
+  /** The client-generated id the app made for it. */
+  id: string;
   name: string;
   actions: SceneActionData[];
   createdAt: string;
@@ -44,14 +45,16 @@ export interface SceneResponse {
 }
 
 export interface SceneActivationResponse {
-  sceneId: number;
+  sceneId: string;
   actions: SceneActionData[];
 }
 
 export interface ScheduleResponse {
-  id: number;
+  /** The client-generated id the app made for it. */
+  id: string;
   name: string;
-  sceneId: number;
+  /** The scene's client id. */
+  sceneId: string;
   startAt: string;
   days: number[];
   hasEnd: boolean;
@@ -189,44 +192,46 @@ export const roomsApi = {
   remove: (id: number) => apiDelete<void>(`/api/smart/rooms/${id}`),
 };
 
+export interface SceneBody {
+  name: string;
+  actions: SceneActionData[];
+}
+
+export interface ScheduleBody {
+  name: string;
+  /** The scene's client id. */
+  sceneId: string;
+  startAt: string;
+  days: number[];
+  hasEnd: boolean;
+  endAt?: string;
+  enabled: boolean;
+}
+
+// Scenes and schedules are addressed by ids the app generates itself, so they can be created offline
+// and sent later: every write is an idempotent PUT/DELETE that is safe to repeat (see sync/sync-engine).
 export const scenesApi = {
   list: () => apiGet<SceneResponse[]>("/api/smart/scenes"),
-  get: (id: number) => apiGet<SceneResponse>(`/api/smart/scenes/${id}`),
-  create: (data: { name: string; actions: SceneActionData[] }) =>
-    apiPost<SceneResponse>("/api/smart/scenes", data),
-  update: (id: number, data: { name: string; actions: SceneActionData[] }) =>
-    apiPut<SceneResponse>(`/api/smart/scenes/${id}`, data),
-  remove: (id: number) => apiDelete<void>(`/api/smart/scenes/${id}`),
-  activate: (id: number) => apiPost<SceneActivationResponse>(`/api/smart/scenes/${id}/activate`),
+  get: (id: string) => apiGet<SceneResponse>(`/api/smart/scenes/${encodeURIComponent(id)}`),
+  /** Create-or-replace. */
+  upsert: (id: string, data: SceneBody) =>
+    apiPut<SceneResponse>(`/api/smart/scenes/${encodeURIComponent(id)}`, data),
+  /** Deleting one that is already gone succeeds. */
+  remove: (id: string) => apiDelete<void>(`/api/smart/scenes/${encodeURIComponent(id)}`),
+  activate: (id: string) =>
+    apiPost<SceneActivationResponse>(`/api/smart/scenes/${encodeURIComponent(id)}/activate`),
 };
 
 export const schedulesApi = {
   list: () => apiGet<ScheduleResponse[]>("/api/smart/schedules"),
-  get: (id: number) => apiGet<ScheduleResponse>(`/api/smart/schedules/${id}`),
-  create: (data: {
-    name: string;
-    sceneId: number;
-    startAt: string;
-    days: number[];
-    hasEnd: boolean;
-    endAt?: string;
-    enabled: boolean;
-  }) => apiPost<ScheduleResponse>("/api/smart/schedules", data),
-  update: (
-    id: number,
-    data: {
-      name: string;
-      sceneId: number;
-      startAt: string;
-      days: number[];
-      hasEnd: boolean;
-      endAt?: string;
-      enabled: boolean;
-    }
-  ) => apiPut<ScheduleResponse>(`/api/smart/schedules/${id}`, data),
-  remove: (id: number) => apiDelete<void>(`/api/smart/schedules/${id}`),
-  setEnabled: (id: number, enabled: boolean) =>
-    apiPatch<ScheduleResponse>(`/api/smart/schedules/${id}/enabled`, { enabled }),
+  get: (id: string) => apiGet<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}`),
+  /** Create-or-replace. Its scene must already exist on the server (400 otherwise). */
+  upsert: (id: string, data: ScheduleBody) =>
+    apiPut<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}`, data),
+  /** Deleting one that is already gone succeeds. */
+  remove: (id: string) => apiDelete<void>(`/api/smart/schedules/${encodeURIComponent(id)}`),
+  setEnabled: (id: string, enabled: boolean) =>
+    apiPatch<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}/enabled`, { enabled }),
 };
 
 export const notificationsApi = {

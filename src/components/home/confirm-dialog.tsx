@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Remove",
+  confirmLabel,
   onConfirm,
 }: {
   open: boolean;
@@ -24,6 +25,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -39,7 +41,7 @@ export function ConfirmDialog({
             }}
             className="h-10 flex-1 rounded-xl bg-muted text-sm font-semibold text-foreground/70"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -49,7 +51,7 @@ export function ConfirmDialog({
             }}
             className="h-10 flex-1 rounded-xl bg-destructive text-sm font-semibold text-white"
           >
-            {confirmLabel}
+            {confirmLabel ?? t("common.remove")}
           </button>
         </DialogFooter>
       </DialogContent>

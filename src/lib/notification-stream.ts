@@ -1,9 +1,11 @@
 // Real-time notifications: the Rust side holds an SSE connection to smart-iot's
 // /api/smart/notifications/stream (see device_stream.rs) and re-emits each event as the Tauri event
 // `notification-event`. New notifications land in the store the moment the server creates them.
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { API_BASE_URL } from "@/lib/api/config";
+import { runsInApp } from "@/lib/platform";
+import { startSse } from "@/lib/sse";
 import type { NotificationResponse } from "@/lib/api/smart";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useNotificationsStore } from "@/lib/store/notifications-store";
@@ -14,6 +16,7 @@ interface StreamPayload {
 }
 
 let unlisten: UnlistenFn | undefined;
+let stopWeb: (() => void) | undefined;
 
 function applyEvent(payload: StreamPayload): void {
   const store = useNotificationsStore.getState();
@@ -38,13 +41,21 @@ function applyEvent(payload: StreamPayload): void {
   }
 }
 
-/** Starts (or restarts, e.g. with a refreshed token) the live notification stream. No-op outside the Tauri app. */
+/** Starts (or restarts, e.g. with a refreshed token) the live notification stream: Rust-side in the app, fetch-based in the browser. */
 export async function startNotificationStream(): Promise<void> {
-  if (!isTauri()) return;
   await stopNotificationStream();
 
   const token = useAuthStore.getState().accessToken;
   if (!token) return;
+
+  if (!runsInApp()) {
+    stopWeb = startSse(
+      `${API_BASE_URL}/api/smart/notifications/stream`,
+      () => useAuthStore.getState().accessToken,
+      applyEvent
+    );
+    return;
+  }
 
   unlisten = await listen<StreamPayload>("notification-event", (event) => {
     applyEvent(event.payload);
@@ -53,7 +64,9 @@ export async function startNotificationStream(): Promise<void> {
 }
 
 export async function stopNotificationStream(): Promise<void> {
-  if (!isTauri()) return;
+  stopWeb?.();
+  stopWeb = undefined;
+  if (!runsInApp()) return;
   unlisten?.();
   unlisten = undefined;
   await invoke("notification_stream_stop");

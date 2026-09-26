@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Home as HomeIcon, Plus, Users } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getRoomIcon } from "@/lib/room-icons";
 import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
@@ -11,6 +12,7 @@ import { AddRoomDialog } from "@/components/home/add-room-dialog";
 import { RoomTemperatureChip } from "@/components/home/hub-live-status";
 
 export default function MyHomePage() {
+  const { t } = useTranslation();
   const rooms = useRoomsStore((s) => s.rooms);
   const roomsHydrated = useRoomsStore((s) => s.hydrated);
   const roomsError = useRoomsStore((s) => s.error);
@@ -23,12 +25,12 @@ export default function MyHomePage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">My Home</h1>
+        <h1 className="text-2xl font-bold">{t("nav.home")}</h1>
         <button
           type="button"
           onClick={() => { setDialogOpen(true); }}
           className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground/70"
-          aria-label="Add room"
+          aria-label={t("home.addRoomAria")}
         >
           <Plus className="size-4" />
         </button>
@@ -41,23 +43,23 @@ export default function MyHomePage() {
         <HomeIcon className="size-9" strokeWidth={1.5} />
         <div className="h-8 w-px bg-white/30" />
         <div className="flex flex-col">
-          <span className="text-base font-semibold">All Devices</span>
-          <span className="text-sm text-white/80">{devices.length} devices</span>
+          <span className="text-base font-semibold">{t("home.allDevices")}</span>
+          <span className="text-sm text-white/80">{t("home.deviceCount", { count: devices.length })}</span>
         </div>
       </Link>
 
       {!roomsHydrated ? (
-        <div className="py-14 text-center text-sm text-muted-foreground">Loading your rooms…</div>
+        <div className="py-14 text-center text-sm text-muted-foreground">{t("home.loadingRooms")}</div>
       ) : rooms.length === 0 && roomsError ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-destructive/40 py-14 text-center">
-          <p className="text-sm font-medium">Couldn&apos;t load your rooms</p>
+          <p className="text-sm font-medium">{t("home.loadRoomsFailed")}</p>
           <p className="max-w-xs px-4 text-xs text-muted-foreground">{roomsError}</p>
           <button
             type="button"
             onClick={() => { void fetchRooms(); }}
             className="mt-1 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-primary-foreground"
           >
-            Retry
+            {t("common.retry")}
           </button>
         </div>
       ) : rooms.length === 0 && sharedDeviceCount === 0 ? (
@@ -66,9 +68,9 @@ export default function MyHomePage() {
             <HomeIcon className="size-6" />
           </span>
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">No rooms yet</p>
+            <p className="text-sm font-medium">{t("home.noRooms")}</p>
             <p className="text-xs text-muted-foreground">
-              Add your first room to start organizing devices.
+              {t("home.noRoomsHint")}
             </p>
           </div>
           <button
@@ -76,7 +78,7 @@ export default function MyHomePage() {
             onClick={() => { setDialogOpen(true); }}
             className="mt-1 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-primary-foreground"
           >
-            Add a room
+            {t("home.addRoomButton")}
           </button>
         </div>
       ) : (
@@ -93,11 +95,11 @@ export default function MyHomePage() {
                 <Icon className={`size-8 ${room.color}`} strokeWidth={1.6} />
                 <span className="text-sm font-medium">{room.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {deviceCount} devices
+                  {t("home.deviceCount", { count: deviceCount })}
                 </span>
                 {room.access === "room" && (
                   <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-primary">
-                    Shared with you
+                    {t("home.sharedWithYou")}
                   </span>
                 )}
                 <RoomTemperatureChip roomId={room.id} variant="inline" />
@@ -110,8 +112,8 @@ export default function MyHomePage() {
               className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
             >
               <Users className="size-8 text-primary" strokeWidth={1.6} />
-              <span className="text-sm font-medium">Shared with me</span>
-              <span className="text-xs text-muted-foreground">{sharedDeviceCount} devices</span>
+              <span className="text-sm font-medium">{t("home.sharedWithMe")}</span>
+              <span className="text-xs text-muted-foreground">{t("home.deviceCount", { count: sharedDeviceCount })}</span>
             </Link>
           )}
         </div>

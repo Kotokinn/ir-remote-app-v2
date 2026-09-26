@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { NAV_ITEMS } from "@/components/app-shell/nav-items";
 import { UnreadBadge } from "@/components/app-shell/unread-badge";
 import { cn } from "@/lib/utils";
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   return (
     <nav className="flex shrink-0 items-center justify-between border-t border-border bg-card px-2 py-2 md:hidden">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
@@ -27,10 +29,10 @@ export function BottomNav() {
                 )}
                 strokeWidth={active ? 2.4 : 2}
               />
-              {href === "/notifications" && <UnreadBadge className="-top-1.5 -right-2.5" />}
+              {href === "/notifications" && <UnreadBadge className="-top-1.5 -end-2.5" />}
             </span>
             <span className={cn(active ? "text-primary" : "text-muted-foreground")}>
-              {label}
+              {t(labelKey)}
             </span>
           </Link>
         );

@@ -1,6 +1,7 @@
-import { fetch } from "@tauri-apps/plugin-http";
+import { appFetch } from "@/lib/api/fetch";
 
 import { API_BASE_URL } from "@/lib/api/config";
+import { t } from "@/lib/i18n";
 
 export interface AccountInfo {
   id: number;
@@ -23,7 +24,11 @@ export interface ApiErrorBody {
   timestamp: string;
   status: number;
   error: string;
+  /** Stable machine-readable code (docs/ERROR_CODES.md in the services repo); absent on errors that predate it. */
+  code?: string;
   message: string;
+  /** Values for the translated text of `code`. */
+  params?: Record<string, unknown>;
   fields?: Record<string, string>;
 }
 
@@ -32,14 +37,22 @@ export class ApiError extends Error {
   body?: ApiErrorBody;
 
   constructor(status: number, body?: ApiErrorBody) {
-    super(body?.message ?? `Request failed with status ${status}`);
+    super(body?.message ?? t("errors.requestFailed", { status }));
     this.status = status;
     this.body = body;
+  }
+
+  get code(): string | undefined {
+    return this.body?.code;
+  }
+
+  get params(): Record<string, unknown> | undefined {
+    return this.body?.params;
   }
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await appFetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

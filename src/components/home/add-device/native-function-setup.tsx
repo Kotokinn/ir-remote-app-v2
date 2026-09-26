@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Device } from "@/lib/mock-data";
 
 function newDeviceId() {
@@ -26,11 +27,12 @@ export function NativeFunctionSetup({
     hubId: string;
   }) => Device;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="px-1 text-sm text-muted-foreground">Give it a name</p>
+      <p className="px-1 text-sm text-muted-foreground">{t("addDevice.giveName")}</p>
       <input
         value={name}
         onChange={(e) => {
@@ -56,7 +58,7 @@ export function NativeFunctionSetup({
         }}
         className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-50"
       >
-        Finish
+        {t("addDevice.finish")}
       </button>
     </div>
   );

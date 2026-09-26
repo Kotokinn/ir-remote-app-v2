@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Cable, Check, Loader2, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Sheet,
   SheetContent,
@@ -9,15 +10,17 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { useRunsInApp } from "@/lib/platform";
 import { useHubsStore, type PhysicalDevice, type TransportPreference } from "@/lib/store/hubs-store";
 import { listSerialPorts } from "@/lib/device/serial-transport";
+import type { TKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-const OPTIONS: Array<{ id: TransportPreference; label: string; description: string }> = [
-  { id: "auto", label: "Auto", description: "RS485 if wired, otherwise MQTT or Bluetooth by signal." },
-  { id: "mqtt", label: "MQTT only", description: "Always over the network. Fails if the hub is offline." },
-  { id: "ble", label: "Bluetooth only", description: "Always over BLE. Fails if out of range." },
-  { id: "rs485", label: "RS485 only", description: "Always over the assigned COM port. Fails if unplugged." },
+const OPTIONS: Array<{ id: TransportPreference; labelKey: TKey; descriptionKey: TKey }> = [
+  { id: "auto", labelKey: "transport.auto", descriptionKey: "transport.autoDesc" },
+  { id: "mqtt", labelKey: "transport.mqtt", descriptionKey: "transport.mqttDesc" },
+  { id: "ble", labelKey: "transport.ble", descriptionKey: "transport.bleDesc" },
+  { id: "rs485", labelKey: "transport.rs485", descriptionKey: "transport.rs485Desc" },
 ];
 
 /**
@@ -27,6 +30,8 @@ const OPTIONS: Array<{ id: TransportPreference; label: string; description: stri
  * device-commands.ts) — the point of choosing by hand is knowing for sure which one just ran.
  */
 export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
+  const { t } = useTranslation();
+  const inApp = useRunsInApp();
   const updatePhysicalDevice = useHubsStore((s) => s.updatePhysicalDevice);
   const [open, setOpen] = useState(false);
   const [ports, setPorts] = useState<string[]>(hub.serialPort ? [hub.serialPort] : []);
@@ -44,12 +49,15 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
         setPorts(found);
       })
       .catch((error: unknown) => {
-        setScanError(error instanceof Error ? error.message : "Couldn't list COM ports.");
+        setScanError(error instanceof Error ? error.message : t("transport.listFailed"));
       })
       .finally(() => {
         setScanning(false);
       });
   }
+
+  // Bluetooth and RS485 are the app's: a browser only ever talks to the server, so there is nothing to choose.
+  if (!inApp) return null;
 
   return (
     <>
@@ -60,7 +68,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
           if (hub.productType === "relay8") scanPorts();
         }}
         className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/70"
-        aria-label="Connection method"
+        aria-label={t("transport.title")}
       >
         <Cable className="size-4" />
       </button>
@@ -68,7 +76,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[85dvh] rounded-t-2xl">
           <SheetHeader>
-            <SheetTitle>Connection method</SheetTitle>
+            <SheetTitle>{t("transport.title")}</SheetTitle>
             <SheetDescription>{hub.name}</SheetDescription>
           </SheetHeader>
 
@@ -83,7 +91,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
                     void updatePhysicalDevice(hub.id, { preferredTransport: option.id });
                   }}
                   className={cn(
-                    "flex items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
+                    "flex items-start gap-3 rounded-2xl px-4 py-3 text-start ring-1 transition-colors",
                     active ? "bg-accent ring-primary" : "bg-card ring-border"
                   )}
                 >
@@ -96,8 +104,8 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
                     {active && <Check className="size-3" />}
                   </span>
                   <span className="flex flex-col">
-                    <span className="text-sm font-medium">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                    <span className="text-sm font-medium">{t(option.labelKey)}</span>
+                    <span className="text-xs text-muted-foreground">{t(option.descriptionKey)}</span>
                   </span>
                 </button>
               );
@@ -107,7 +115,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
           {hub.productType === "relay8" && (
             <div className="flex flex-col gap-2 border-t border-border px-4 py-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">COM port</span>
+                <span className="text-sm font-medium">{t("transport.comPort")}</span>
                 <button
                   type="button"
                   onClick={scanPorts}
@@ -115,13 +123,13 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
                   className="flex items-center gap-1 text-xs font-medium text-primary disabled:opacity-50"
                 >
                   {scanning ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
-                  Rescan
+                  {t("transport.rescan")}
                 </button>
               </div>
               {scanError && <p className="text-xs text-destructive">{scanError}</p>}
               {!scanError && ports.length === 0 && !scanning && (
                 <p className="text-xs text-muted-foreground">
-                  No COM ports found. Plug in the RS485 adapter, then rescan.
+                  {t("transport.noPorts")}
                 </p>
               )}
               <select
@@ -131,7 +139,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
                 }}
                 className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none"
               >
-                <option value="">Not assigned</option>
+                <option value="">{t("transport.notAssigned")}</option>
                 {ports.map((port) => (
                   <option key={port} value={port}>
                     {port}

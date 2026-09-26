@@ -3,24 +3,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useScenesStore } from "@/lib/store/scenes-store";
 import { useSchedulesStore } from "@/lib/store/schedules-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/home/confirm-dialog";
+import { weekdayNames } from "@/lib/i18n/format";
 import { cn } from "@/lib/utils";
 
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-
-function formatDays(days: number[]) {
-  if (days.length === 7) return "Every day";
+function formatDays(days: number[], weekdays: string[], everyDay: string) {
+  if (days.length === 7) return everyDay;
   return days
     .slice()
     .sort((a, b) => a - b)
-    .map((d) => WEEKDAYS[d])
+    .map((d) => weekdays[d])
     .join(" ");
 }
 
 export default function AutomationPage() {
+  const { t, i18n } = useTranslation();
+  const weekdays = weekdayNames(i18n.language, "narrow");
   const [tab, setTab] = useState<"scenes" | "schedules">("schedules");
   const [runningId, setRunningId] = useState<string | null>(null);
   const [activation, setActivation] = useState<{
@@ -30,9 +32,9 @@ export default function AutomationPage() {
   } | null>(null);
   const activationOk = activation !== null && !activation.crashed && activation.failedHubs.length === 0;
   const activationProblem = activation?.crashed
-    ? "Couldn't run the scene."
+    ? t("automation.runFailed")
     : activation && activation.failedHubs.length > 0
-      ? `Couldn't reach: ${activation.failedHubs.join(", ")}. Check the hub is online or nearby, then try again.`
+      ? t("automation.unreachable", { hubs: activation.failedHubs.join(", ") })
       : null;
   const scenes = useScenesStore((s) => s.scenes);
   const activateScene = useScenesStore((s) => s.activateScene);
@@ -51,11 +53,11 @@ export default function AutomationPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Automation</h1>
+        <h1 className="text-2xl font-bold">{t("nav.automation")}</h1>
         <Link
           href={tab === "scenes" ? "/automation/scene" : "/automation/schedule"}
           className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground/70"
-          aria-label="Create automation"
+          aria-label={t("automation.createAria")}
         >
           <Plus className="size-4" />
         </Link>
@@ -63,8 +65,8 @@ export default function AutomationPage() {
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v as "scenes" | "schedules"); }}>
         <TabsList variant="line">
-          <TabsTrigger value="scenes">Scenes</TabsTrigger>
-          <TabsTrigger value="schedules">Schedules</TabsTrigger>
+          <TabsTrigger value="scenes">{t("automation.tabScenes")}</TabsTrigger>
+          <TabsTrigger value="schedules">{t("automation.tabSchedules")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="scenes">
@@ -77,15 +79,15 @@ export default function AutomationPage() {
             )}
             {scenes.length === 0 ? (
               <div className="flex flex-col items-center gap-2 pt-10 text-center">
-                <p className="text-sm font-medium">No scenes yet</p>
+                <p className="text-sm font-medium">{t("automation.noScenes")}</p>
                 <p className="text-xs text-muted-foreground">
-                  A scene saves a set of device states you can trigger with one tap.
+                  {t("automation.noScenesHint")}
                 </p>
                 <Link
                   href="/automation/scene"
                   className="mt-1 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-primary-foreground"
                 >
-                  Create a scene
+                  {t("automation.createScene")}
                 </Link>
               </div>
             ) : (
@@ -104,7 +106,7 @@ export default function AutomationPage() {
                     <div className="flex flex-1 flex-col">
                       <span className="text-sm font-semibold">{scene.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {scene.actions.length} device{scene.actions.length === 1 ? "" : "s"}
+                        {t("home.deviceCount", { count: scene.actions.length })}
                       </span>
                     </div>
                   </Link>
@@ -134,17 +136,17 @@ export default function AutomationPage() {
                     )}
                   >
                     {runningId === scene.id
-                      ? "Running…"
+                      ? t("automation.running")
                       : activation?.id === scene.id && activationOk
-                        ? "Activated"
-                        : "Activate"}
+                        ? t("automation.activated")
+                        : t("automation.activate")}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setDeleteScene({ id: scene.id, name: scene.name });
                     }}
-                    aria-label={`Remove ${scene.name}`}
+                    aria-label={t("room.removeAria", { name: scene.name })}
                     className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="size-4" />
@@ -159,15 +161,15 @@ export default function AutomationPage() {
           <div className="flex flex-col gap-2 pt-3">
             {schedules.length === 0 ? (
               <div className="flex flex-col items-center gap-2 pt-10 text-center">
-                <p className="text-sm font-medium">No schedules yet</p>
+                <p className="text-sm font-medium">{t("automation.noSchedules")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Run a scene automatically at a set time and repeat days.
+                  {t("automation.noSchedulesHint")}
                 </p>
                 <Link
                   href="/automation/schedule"
                   className="mt-1 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-primary-foreground"
                 >
-                  Create a schedule
+                  {t("automation.createSchedule")}
                 </Link>
               </div>
             ) : (
@@ -194,12 +196,12 @@ export default function AutomationPage() {
                           <span className="truncate text-xs text-muted-foreground">
                             {linkedName} · {schedule.startAt}
                             {schedule.hasEnd && schedule.endAt ? `–${schedule.endAt}` : ""} ·{" "}
-                            {formatDays(schedule.days)}
+                            {formatDays(schedule.days, weekdays, t("automation.everyDay"))}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-destructive">
                             <AlertTriangle className="size-3 shrink-0" />
-                            Scene was removed
+                            {t("automation.sceneRemoved")}
                           </span>
                         )}
                       </div>
@@ -210,7 +212,7 @@ export default function AutomationPage() {
                       onClick={() => {
                         setDeleteSchedule({ id: schedule.id, name: schedule.name });
                       }}
-                      aria-label={`Remove ${schedule.name}`}
+                      aria-label={t("room.removeAria", { name: schedule.name })}
                       className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="size-4" />
@@ -228,8 +230,8 @@ export default function AutomationPage() {
         onOpenChange={(open) => {
           if (!open) setDeleteScene(null);
         }}
-        title={`Remove ${deleteScene?.name ?? "this scene"}?`}
-        description="Schedules pointing to this scene will show a warning."
+        title={t("room.removeTitle", { name: deleteScene?.name ?? t("automation.thisScene") })}
+        description={t("automation.removeSceneHint")}
         onConfirm={() => {
           if (deleteScene) void removeScene(deleteScene.id);
         }}
@@ -240,7 +242,7 @@ export default function AutomationPage() {
         onOpenChange={(open) => {
           if (!open) setDeleteSchedule(null);
         }}
-        title={`Remove ${deleteSchedule?.name ?? "this schedule"}?`}
+        title={t("room.removeTitle", { name: deleteSchedule?.name ?? t("automation.thisSchedule") })}
         onConfirm={() => {
           if (deleteSchedule) void removeSchedule(deleteSchedule.id);
         }}

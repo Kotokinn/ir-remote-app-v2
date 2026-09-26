@@ -1,0 +1,623 @@
+{
+  "common": {
+    "back": "Quay lại",
+    "retry": "Thử lại",
+    "cancel": "Huỷ",
+    "save": "Lưu",
+    "delete": "Xoá",
+    "add": "Thêm",
+    "done": "Xong",
+    "close": "Đóng",
+    "next": "Tiếp",
+    "loading": "Đang tải…",
+    "on": "Bật",
+    "off": "Tắt",
+    "remove": "Gỡ",
+    "cannotUndo": "Không thể hoàn tác.",
+    "continue": "Tiếp tục",
+    "name": "Tên",
+    "tryAgain": "Thử lại",
+    "ok": "OK"
+  },
+  "app": {
+    "name": "Smart Home",
+    "tagline": "Điều khiển mọi phòng, chỉ một chạm"
+  },
+  "nav": {
+    "home": "Nhà của tôi",
+    "automation": "Tự động hoá",
+    "favorites": "Yêu thích",
+    "notifications": "Thông báo",
+    "settings": "Cài đặt"
+  },
+  "notifications": {
+    "unreadAria_other": "{{count}} thông báo chưa đọc",
+    "refreshFailed": "Không làm mới được thông báo. Hãy kiểm tra kết nối; đang hiển thị danh sách gần nhất.",
+    "deleteFailed": "Không xoá được thông báo đó. Thông báo đã được khôi phục; hãy thử lại.",
+    "empty": "Chưa có thông báo nào",
+    "emptyHint": "Các cảnh báo như hub ngoại tuyến hoặc được cập nhật sẽ hiện ở đây.",
+    "swipeHint": "Vuốt ngang một thông báo để xoá nó."
+  },
+  "onboarding": {
+    "title": "Chào mừng đến với Smart Home",
+    "blurb": "Quản lý ánh sáng, điều hoà, rèm cửa và an ninh cho mọi phòng chỉ trong một ứng dụng.",
+    "getStarted": "Bắt đầu"
+  },
+  "login": {
+    "title": "Chào mừng trở lại",
+    "subtitle": "Đăng nhập để điều khiển ngôi nhà thông minh của bạn.",
+    "google": "Tiếp tục với Google",
+    "signingIn": "Đang đăng nhập…",
+    "failed": "Đăng nhập Google thất bại",
+    "terms": "Khi tiếp tục, bạn đồng ý cho ứng dụng này quản lý các thiết bị nhà thông minh của bạn."
+  },
+  "home": {
+    "addRoomAria": "Thêm phòng",
+    "allDevices": "Tất cả thiết bị đã liên kết",
+    "deviceCount_other": "{{count}} thiết bị",
+    "loadingRooms": "Đang tải danh sách phòng…",
+    "loadRoomsFailed": "Không tải được danh sách phòng",
+    "noRooms": "Chưa có phòng nào",
+    "noRoomsHint": "Thêm phòng đầu tiên để bắt đầu sắp xếp thiết bị.",
+    "addRoomButton": "Thêm phòng",
+    "sharedWithYou": "Được chia sẻ cho bạn",
+    "sharedWithMe": "Được chia sẻ với tôi"
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "language": "Ngôn ngữ",
+    "languageHint": "Chọn ngôn ngữ hiển thị của ứng dụng.",
+    "logout": "Đăng xuất",
+    "comingSoon": "{{name}} sẽ sớm ra mắt.",
+    "items": {
+      "new-brands": "Thương hiệu mới",
+      "profile": "Hồ sơ",
+      "household": "Hộ gia đình",
+      "account": "Tài khoản",
+      "sync-options": "Tuỳ chọn đồng bộ",
+      "support": "Hỗ trợ",
+      "tips": "Mẹo"
+    },
+    "logoutDialog": {
+      "title": "Thay đổi chưa đồng bộ",
+      "body_other": "{{count}} thay đổi chưa được lưu lên máy chủ. Đăng xuất bây giờ sẽ làm mất thay đổi này.",
+      "stillPending_other": "Còn {{count}} thay đổi chưa gửi được. Kiểm tra kết nối rồi thử lại, hoặc bỏ thay đổi này.",
+      "syncThenSignOut": "Đồng bộ rồi đăng xuất",
+      "syncing": "Đang đồng bộ…",
+      "discard": "Bỏ thay đổi và đăng xuất"
+    }
+  },
+  "sync": {
+    "entity": {
+      "scene": "Cảnh",
+      "schedule": "Lịch",
+      "device": "Thiết bị",
+      "hub": "Hub"
+    },
+    "kind": {
+      "upsert": "lưu",
+      "patch": "thay đổi",
+      "delete": "xoá"
+    },
+    "item": "{{entity}} “{{label}}” — {{kind}}",
+    "waiting_other": "{{count}} thay đổi đang chờ đồng bộ",
+    "syncNow": "Đồng bộ ngay",
+    "failedBanner_other": "{{count}} thay đổi không lưu được lên máy chủ. Chạm để xem.",
+    "failedTitle": "Các thay đổi không lưu được",
+    "failedBody": "Máy chủ đã từ chối các thay đổi này. Màn hình có thể vẫn hiển thị chúng cho đến khi bạn thử lại hoặc bỏ đi.",
+    "drop": "Bỏ",
+    "err": {
+      "dependencyFailed": "Chưa lưu vì mục mà nó phụ thuộc không lưu được ({{label}}).",
+      "dependencyDeleted": "Chưa lưu vì mục mà nó phụ thuộc đã bị xoá ({{label}}).",
+      "needSignIn": "Đang chờ bạn đăng nhập lại.",
+      "offline": "Đang ngoại tuyến — sẽ thử lại.",
+      "serverKeepsFailing": "Máy chủ liên tục lỗi ({{reason}}). Hãy thử lại sau.",
+      "serverError": "Lỗi máy chủ — sẽ thử lại ({{reason}}).",
+      "unknown": "Lỗi không xác định"
+    }
+  },
+  "category": {
+    "lighting": "Chiếu sáng",
+    "hvac": "Điều hoà",
+    "ir": "Điều khiển IR",
+    "curtains": "Rèm cửa",
+    "sensors": "Cảm biến",
+    "security": "An ninh",
+    "switches": "Công tắc",
+    "alarm": "Báo thức",
+    "notFound": "Không tìm thấy danh mục.",
+    "addDeviceAria": "Thêm thiết bị",
+    "emptyTitle": "Chưa có thiết bị nào trong {{category}}",
+    "emptyHint": "Chạm nút + để thêm thiết bị vào danh mục này.",
+    "checkingState": "Đang kiểm tra trạng thái hiện tại…",
+    "controlOnly": "{{name}} được chia sẻ cho bạn chỉ để điều khiển, nên không thể thay đổi các nút điều khiển và báo thức của nó tại đây.",
+    "removeDevice": "Xoá thiết bị"
+  },
+  "roomIcon": {
+    "bed": "Phòng ngủ",
+    "sofa": "Phòng khách",
+    "bath": "Phòng tắm",
+    "chef-hat": "Nhà bếp",
+    "archive": "Kho",
+    "book-open": "Phòng làm việc",
+    "door-open": "Lối vào",
+    "home": "Khác"
+  },
+  "room": {
+    "notFound": "Không tìm thấy phòng.",
+    "backHome": "Về Nhà của tôi",
+    "hubsModules": "Hub & module",
+    "irHubHint": "Hub IR · chạm để thêm chức năng",
+    "relayModule": "Module 8 relay",
+    "removeAria": "Xoá {{name}}",
+    "removeTitle": "Xoá {{name}}?",
+    "thisDevice": "thiết bị này",
+    "removeDescription_other": "Thao tác này cũng xoá {{count}} thiết bị liên kết và không thể hoàn tác.",
+    "unknown": "Phòng không xác định",
+    "noChannels": "Chưa cấu hình kênh nào."
+  },
+  "addRoom": {
+    "title": "Thêm phòng",
+    "description": "Đặt tên cho phòng và chọn một biểu tượng.",
+    "placeholder": "vd: Phòng ngủ",
+    "submit": "Thêm phòng"
+  },
+  "transport": {
+    "title": "Phương thức kết nối",
+    "auto": "Tự động",
+    "autoDesc": "RS485 nếu có dây, nếu không thì MQTT hoặc Bluetooth tuỳ theo tín hiệu.",
+    "mqtt": "Chỉ MQTT",
+    "mqttDesc": "Luôn qua mạng. Sẽ lỗi nếu hub ngoại tuyến.",
+    "ble": "Chỉ Bluetooth",
+    "bleDesc": "Luôn qua BLE. Sẽ lỗi nếu ngoài tầm phủ sóng.",
+    "rs485": "Chỉ RS485",
+    "rs485Desc": "Luôn qua cổng COM đã gán. Sẽ lỗi nếu bị rút ra.",
+    "comPort": "Cổng COM",
+    "rescan": "Quét lại",
+    "noPorts": "Không tìm thấy cổng COM. Hãy cắm bộ chuyển RS485 rồi quét lại.",
+    "notAssigned": "Chưa gán",
+    "listFailed": "Không liệt kê được các cổng COM."
+  },
+  "hubLive": {
+    "offline": "Ngoại tuyến",
+    "connecting": "Đang kết nối…",
+    "online": "Trực tuyến",
+    "bluetooth": "Bluetooth",
+    "measuredAtHub": "Đo tại hub",
+    "measuredInRoom": "Đo tại hub trong phòng này",
+    "now": "Hiện tại {{temp}}"
+  },
+  "addDevice": {
+    "steps": {
+      "product": "Thêm thiết bị",
+      "provisioning": "Kết nối thiết bị",
+      "hubFunction": "Thêm chức năng",
+      "ac": "Thêm điều hoà",
+      "remote": "Thêm remote học lệnh",
+      "rgb": "Thêm đèn RGB",
+      "temp": "Thêm điều khiển nhiệt độ",
+      "alarm": "Thêm báo thức",
+      "relay": "Thiết lập các kênh"
+    },
+    "saving": "Đang lưu…",
+    "saveFailed": "Không lưu được. Hãy kiểm tra kết nối và thử lại.",
+    "rgbPlaceholder": "vd: Dải đèn RGB phòng ngủ",
+    "tempPlaceholder": "vd: Máy sưởi phòng khách",
+    "whatAdding": "Bạn muốn thêm gì?",
+    "products": {
+      "hubIr": {
+        "name": "Hub IR",
+        "desc": "Điều khiển điều hoà và các thiết bị khác bằng hồng ngoại — mã điều hoà hoặc remote học lệnh."
+      },
+      "relay8": {
+        "name": "Module relay 8 kênh",
+        "desc": "8 công tắc bật/tắt độc lập — đèn, máy bơm, cổng hoặc bất kỳ tải có dây nào."
+      }
+    },
+    "controlPrompt": "<b>{{name}}</b> sẽ điều khiển gì?",
+    "functions": {
+      "ac": {
+        "title": "Điều hoà",
+        "desc": "Điều khiển điều hoà ngoài qua IR — chọn hãng và mã, điều khiển đầy đủ."
+      },
+      "remote": {
+        "title": "Remote học lệnh",
+        "desc": "Bất kỳ thiết bị nào khác (TV, quạt, loa thanh…) — học các nút từ remote gốc."
+      },
+      "rgb": {
+        "title": "Đèn RGB",
+        "desc": "Đèn màu tích hợp sẵn trong hub này — chế độ, độ sáng, màu sắc."
+      },
+      "temp": {
+        "title": "Điều khiển nhiệt độ",
+        "desc": "Núm sưởi/làm mát tích hợp sẵn trên hub này (không phải điều hoà ngoài)."
+      },
+      "alarm": {
+        "title": "Báo thức",
+        "desc": "Báo thức tích hợp trên hub này — đặt giờ và các ngày lặp lại."
+      }
+    },
+    "giveName": "Đặt tên cho nó",
+    "finish": "Hoàn tất",
+    "webPairingTitle": "Ghép nối cần dùng ứng dụng",
+    "webPairingBody": "Thêm hub hoặc module relay mới cần Bluetooth, mà trang trình duyệt không dùng được ở đây. Hãy ghép nối trong ứng dụng Android hoặc máy tính — sau đó bạn cũng điều khiển được từ trang này."
+  },
+  "pairing": {
+    "product": {
+      "hub-ir": "Hub IR",
+      "relay8": "Module relay"
+    },
+    "scanFailed": "Quét Bluetooth thất bại",
+    "connectFailed": "Không kết nối được qua Bluetooth",
+    "provisionFailed": "Thiết lập thất bại",
+    "wifiRejected": "Thiết bị không kết nối được với mạng Wi-Fi đó.",
+    "offlineAfterRestart": "Thiết bị không hoạt động trở lại sau khi khởi động lại. Hãy kiểm tra mạng Wi-Fi này có truy cập được máy chủ không, rồi thử lại.",
+    "saveFailed": "Không lưu được thiết bị. Hãy thử lại.",
+    "scanning": "Đang quét các thiết bị ở gần…",
+    "scanningHint": "Hãy chắc chắn {{product}} đã được cấp nguồn và đang ở chế độ ghép nối.",
+    "select": "Chọn thiết bị của bạn",
+    "noneFound": "Không tìm thấy thiết bị nào ở gần.",
+    "signal": "Tín hiệu {{rssi}} dBm",
+    "scanAgain": "Quét lại",
+    "connecting": "Đang kết nối tới {{name}}…",
+    "sendWifi": "Gửi thông tin Wi-Fi của bạn qua Bluetooth",
+    "networkName": "Tên mạng",
+    "password": "Mật khẩu",
+    "connect": "Kết nối",
+    "checkingWifi": "Đang kiểm tra Wi-Fi của bạn…",
+    "claiming": "Thiết bị đang kết nối — đang đăng ký thiết bị…",
+    "checkingWifiHint": "Thiết bị đang thử kết nối vào mạng Wi-Fi của bạn. Việc này có thể mất tới 20 giây.",
+    "claimingHint": "Việc này có thể mất tới 20 giây trong khi thiết bị kết nối Wi-Fi và MQTT.",
+    "failed": "Ghép nối thất bại",
+    "tryAgain": "Thử lại",
+    "connectedName": "Đã kết nối! Hãy đặt tên cho nó"
+  },
+  "errors": {
+    "alarmNotPaired": "Hub này chưa được ghép nối qua mạng nên báo thức chưa được gửi tới nó.",
+    "alarmUnreachable": "Không kết nối được {{hub}}. Báo thức có thể không đổ chuông như đã đặt.",
+    "scheduleSyncFailed": "Đã lưu, nhưng không gửi được tới: {{hubs}}. Hãy kiểm tra hub đang trực tuyến hoặc ở gần, rồi lưu lại.",
+    "bleNotFound": "Không tìm thấy thiết bị {{id}} qua Bluetooth (ngoài tầm phủ sóng?)",
+    "noComPort": "Thiết bị này chưa được gán cổng COM — hãy chọn một cổng trong phần cài đặt của hub.",
+    "googleTimeout": "Đăng nhập Google đã hết thời gian chờ",
+    "googleCancelled": "Đăng nhập Google đã bị huỷ",
+    "requestFailed": "Yêu cầu thất bại với mã trạng thái {{status}}",
+    "bleServices": "Không phát hiện được dịch vụ BLE: {{services}}",
+    "notInBrowser": "Phương thức kết nối này cần dùng ứng dụng: trình duyệt chỉ điều khiển thiết bị thông qua máy chủ."
+  },
+  "relaySetup": {
+    "defaultName": "Relay {{n}}",
+    "notPaired": "Hub này chưa được ghép nối qua mạng.",
+    "unreachable": "Không kết nối được module relay.",
+    "intro": "Đặt tên cho từng kênh trong 8 kênh và chọn nơi chúng thuộc về.",
+    "tested": "Đã thử ✓",
+    "test": "Thử",
+    "finish": "Hoàn tất thiết lập"
+  },
+  "remoteSetup": {
+    "defaultName": "Remote",
+    "whatSettingUp": "Bạn đang thiết lập thiết bị gì? (vd: TV phòng khách)",
+    "namePlaceholder": "Tên thiết bị",
+    "pointRemote": "Hướng remote gốc vào hub và nhấn “{{label}}”",
+    "learning": "Đang học lệnh…",
+    "addAtLeast": "Thêm ít nhất một nút cho <b>{{name}}</b>",
+    "finish_other": "Hoàn tất ({{count}} nút)"
+  },
+  "alarmSetup": {
+    "defaultName": "Báo thức",
+    "placeholder": "vd: Báo thức buổi sáng",
+    "time": "Giờ",
+    "repeat": "Lặp lại",
+    "noRepeat": "Chưa chọn ngày lặp lại — báo thức này sẽ không đổ chuông.",
+    "sending": "Đang gửi tới hub…"
+  },
+  "acSetup": {
+    "notPaired": "Hub này chưa được ghép nối qua mạng nên chưa gửi được gì tới nó.",
+    "testFailedDefault": "Không gửi được tín hiệu thử.",
+    "defaultNameBrand": "Điều hoà {{brand}}",
+    "myAc": "Điều hoà của tôi",
+    "selectBrand": "Chọn hãng điều hoà của bạn",
+    "cantFind": "Không thấy hãng của tôi — học lệnh thủ công",
+    "noneWorked": "Không mã {{brand}} nào hoạt động",
+    "triedAll_other": "Chúng tôi đã thử {{count}} biến thể {{brand}} đã biết. Hãy kiểm tra hub có hướng vào điều hoà không, hoặc học lệnh từ remote của bạn.",
+    "retryBrand": "Thử lại các mã {{brand}}",
+    "learnManually": "Học lệnh thủ công",
+    "pickAnother": "Chọn hãng khác",
+    "testing": "Đang thử {{brand}} · mã {{index}}/{{total}}…",
+    "testingHint": "Đang gửi tín hiệu bật điều hoà (lạnh, 24°).",
+    "sendFailed": "Không gửi được tín hiệu thử",
+    "signalSent": "Đã gửi tín hiệu · {{brand}} mã {{index}}/{{total}}. Điều hoà có phản hồi không?",
+    "checkAc": "Hãy nhìn điều hoà — nó vừa bật hoặc kêu bíp phải không? Hãy tự xác nhận, ứng dụng không tự phát hiện được.",
+    "nextCode": "Không, thử mã tiếp theo",
+    "noneWorkedShort": "Không, không mã nào được",
+    "yesWorked": "Có, đã hoạt động",
+    "sendAgain": "Gửi lại",
+    "noneOfThese": "Không mã nào được — học lệnh thủ công",
+    "buttonN": "Nút {{index}}/{{total}}",
+    "learnThis": "Học nút này",
+    "itWorks": "Đã hoạt động! Hãy đặt tên cho điều hoà",
+    "allSet": "Xong rồi — hãy đặt tên cho điều hoà"
+  },
+  "remoteButton": {
+    "power": "Nguồn",
+    "nav-up": "Lên",
+    "nav-down": "Xuống",
+    "nav-left": "Trái",
+    "nav-right": "Phải",
+    "nav-ok": "OK",
+    "nav-back": "Quay lại",
+    "nav-home": "Trang chủ",
+    "nav-menu": "Menu",
+    "vol-up": "Âm +",
+    "vol-down": "Âm -",
+    "vol-mute": "Tắt tiếng",
+    "ch-up": "Kênh +",
+    "ch-down": "Kênh -",
+    "play-pause": "Phát/Tạm dừng",
+    "stop": "Dừng",
+    "rewind": "Tua lại",
+    "forward": "Tua tới",
+    "prev": "Trước",
+    "next": "Tiếp",
+    "ac-temp-up": "Nhiệt độ +",
+    "ac-temp-down": "Nhiệt độ -",
+    "ac-mode": "Chế độ",
+    "ac-fan": "Tốc độ quạt"
+  },
+  "remoteGroup": {
+    "power": "Nguồn",
+    "nav": "Điều hướng",
+    "volume": "Âm lượng",
+    "playback": "Phát nhạc",
+    "numbers": "Số",
+    "custom": "Tuỳ chỉnh"
+  },
+  "remotePicker": {
+    "title": "Thêm một nút",
+    "customPlaceholder": "Tên nút tuỳ chỉnh"
+  },
+  "device": {
+    "via": "qua {{hub}}",
+    "power": "Nguồn",
+    "shade": "Sắc thái {{n}}",
+    "colorWheel": "Bánh xe màu"
+  },
+  "ac": {
+    "subject": {
+      "child": "Trẻ em",
+      "adult": "Người lớn",
+      "elder": "Người cao tuổi"
+    },
+    "mode": {
+      "cool": "Lạnh",
+      "heat": "Sưởi",
+      "fan": "Quạt",
+      "auto": "Tự động",
+      "dry": "Hút ẩm"
+    },
+    "fan": {
+      "auto": "Tự động",
+      "low": "Thấp",
+      "min": "Tối thiểu",
+      "medium": "Vừa",
+      "high": "Cao",
+      "max": "Tối đa"
+    },
+    "swing": {
+      "highest": "Cao nhất",
+      "middle": "Giữa",
+      "lowest": "Thấp nhất",
+      "auto": "Tự động"
+    },
+    "decreaseTemp": "Giảm nhiệt độ",
+    "increaseTemp": "Tăng nhiệt độ",
+    "modeLabel": "Chế độ",
+    "fanSpeed": "Tốc độ quạt",
+    "swingVertical": "Đảo gió (dọc)",
+    "swingButton": "Đảo gió",
+    "sleepMode": "Chế độ ngủ",
+    "sleepFor": "Dành cho",
+    "wakeAt": "Thức dậy lúc",
+    "targetTemp": "Nhiệt độ mục tiêu",
+    "defaultTemp": "Mặc định ({{temp}}°)",
+    "decreaseSleepTemp": "Giảm nhiệt độ khi ngủ",
+    "increaseSleepTemp": "Tăng nhiệt độ khi ngủ",
+    "reset": "Đặt lại"
+  },
+  "rgb": {
+    "effect": {
+      "solid": "Cố định",
+      "blink": "Nhấp nháy",
+      "breathe": "Thở",
+      "flow": "Chảy",
+      "chase": "Đuổi"
+    },
+    "effectLabel": "Hiệu ứng",
+    "speed": "Tốc độ",
+    "brightness": "Độ sáng",
+    "color": "Màu sắc"
+  },
+  "light": {
+    "mode": {
+      "morning": "Buổi sáng",
+      "day": "Ban ngày",
+      "night": "Ban đêm"
+    },
+    "modeLabel": "Chế độ",
+    "intensity": "Cường độ",
+    "shades": "Sắc thái"
+  },
+  "remotePanel": {
+    "editLayout": "Sửa bố cục"
+  },
+  "automation": {
+    "createAria": "Tạo tự động hoá",
+    "tabScenes": "Cảnh",
+    "tabSchedules": "Lịch",
+    "runFailed": "Không chạy được cảnh.",
+    "unreachable": "Không kết nối được: {{hubs}}. Hãy kiểm tra hub đang trực tuyến hoặc ở gần, rồi thử lại.",
+    "noScenes": "Chưa có cảnh nào",
+    "noScenesHint": "Một cảnh lưu lại trạng thái của nhiều thiết bị để bạn kích hoạt chỉ bằng một chạm.",
+    "createScene": "Tạo cảnh",
+    "running": "Đang chạy…",
+    "activated": "Đã kích hoạt",
+    "activate": "Kích hoạt",
+    "noSchedules": "Chưa có lịch nào",
+    "noSchedulesHint": "Tự động chạy một cảnh vào giờ và các ngày lặp lại đã đặt.",
+    "createSchedule": "Tạo lịch",
+    "sceneRemoved": "Cảnh đã bị xoá",
+    "thisScene": "cảnh này",
+    "thisSchedule": "lịch này",
+    "removeSceneHint": "Các lịch dùng cảnh này sẽ hiện cảnh báo.",
+    "everyDay": "Mỗi ngày"
+  },
+  "scheduleForm": {
+    "newName": "Lịch mới",
+    "defaultName": "Lịch",
+    "saveFailed": "Không lưu được lịch",
+    "needScene": "Bạn cần tạo một cảnh trước",
+    "needSceneHint": "Lịch sẽ chạy một cảnh có sẵn vào giờ đã đặt — hãy tạo một cảnh trước.",
+    "namePlaceholder": "Tên lịch",
+    "sceneToRun": "Cảnh cần chạy",
+    "startAt": "Bắt đầu lúc",
+    "revertTitle": "Đồng thời hoàn tác vào một giờ",
+    "revertHint": "Tự động hoàn tác cảnh sau khoảng thời gian này",
+    "endAt": "Kết thúc lúc",
+    "enabled": "Bật"
+  },
+  "sceneForm": {
+    "newName": "Cảnh mới",
+    "defaultName": "Cảnh",
+    "saveFailed": "Không lưu được cảnh",
+    "namePlaceholder": "Tên cảnh",
+    "hint": "Chọn thiết bị và đặt trạng thái bạn muốn cảnh này áp dụng."
+  },
+  "sceneEditor": {
+    "turnOn": "Bật",
+    "noEligible": "Chưa có thiết bị phù hợp — hãy thêm đèn, điều hoà, đèn RGB hoặc công tắc trước.",
+    "collapse": "Thu gọn",
+    "expand": "Mở rộng"
+  },
+  "favorites": {
+    "addAria": "Thêm mục yêu thích",
+    "items": {
+      "fav-dimmer": "Đèn chỉnh sáng",
+      "fav-tubelight": "Đèn tuýp",
+      "fav-bedlamp": "Đèn ngủ",
+      "fav-thermostat": "Bộ điều nhiệt sảnh",
+      "fav-ac": "Điều hoà",
+      "fav-lock": "Khoá cửa chính",
+      "fav-curtain": "Rèm cửa",
+      "fav-presence": "Chế độ có người"
+    }
+  },
+  "ota": {
+    "available": "Đã có firmware {{newVersion}} (hiện tại {{currentVersion}}).",
+    "starting": "Đang bắt đầu…",
+    "updateNow": "Cập nhật ngay",
+    "updating": "Đang cập nhật lên {{version}}…",
+    "updated": "Đã cập nhật lên {{version}}.",
+    "dismiss": "Bỏ qua",
+    "failed": "Cập nhật lên {{version}} thất bại.",
+    "retrying": "Đang thử lại…"
+  },
+  "household": {
+    "loadFailed": "Không tải được danh sách chia sẻ của bạn.",
+    "inviteFailed": "Không tạo được lời mời.",
+    "joined": "Bây giờ bạn có thể dùng {{targets}} của {{owner}}.",
+    "joinFailed": "Không dùng được mã đó.",
+    "endFailed": "Không kết thúc được chia sẻ đó.",
+    "scopeRoom": "Cả phòng",
+    "scopeDevice": "Một thiết bị",
+    "fromOwner": "từ {{email}}",
+    "withMember": "với {{email}}",
+    "leave": "Rời khỏi",
+    "revoke": "Thu hồi",
+    "joinTitle": "Tham gia bằng mã",
+    "codePlaceholder": "Mã mời",
+    "scanAria": "Quét mã QR",
+    "join": "Tham gia",
+    "nothingShared": "Chưa có gì được chia sẻ với bạn.",
+    "youreSharing": "Bạn đang chia sẻ",
+    "nothingGiven": "Bạn chưa chia sẻ gì cả.",
+    "shareTitle": "Chia sẻ",
+    "shareHint": "Chọn một phòng để chia sẻ toàn bộ (họ cũng có thể thêm thiết bị của riêng họ vào đó), hoặc chọn từng thiết bị (chỉ để điều khiển).",
+    "inviteTitleOne": "Chia sẻ “{{name}}”",
+    "inviteTitleMany_other": "Chia sẻ {{count}} mục",
+    "inviteHint": "Hãy quét mã bằng camera điện thoại của họ, hoặc nhờ họ nhập vào Hộ gia đình → Tham gia. Mã chỉ dùng được một lần và hết hạn vào {{when}}.",
+    "roomAccess": "cả phòng — điều khiển, tự động hoá, thêm thiết bị của riêng họ",
+    "deviceAccess": "chỉ điều khiển",
+    "qrAlt": "Mã QR lời mời",
+    "notInRoom": "Không thuộc phòng nào",
+    "shareRoomAria": "Chia sẻ cả phòng {{name}}",
+    "shareDeviceAria": "Chia sẻ {{name}}",
+    "addFirst": "Hãy thêm một phòng hoặc một thiết bị trước.",
+    "pickToShare": "Chọn phòng hoặc thiết bị để chia sẻ",
+    "shareSelected": "Chia sẻ {{count}} mục đã chọn"
+  },
+  "qrScan": {
+    "title": "Quét mã mời",
+    "description": "Hướng camera vào mã QR trên điện thoại hoặc màn hình kia.",
+    "denied": "Quyền truy cập camera bị từ chối. Hãy cho phép trong cài đặt hệ thống, hoặc nhập mã thay thế.",
+    "notFound": "Không tìm thấy camera. Hãy nhập mã thay thế.",
+    "busy": "Camera đang được ứng dụng khác sử dụng.",
+    "failed": "Không khởi động được camera. Hãy nhập mã thay thế.",
+    "unavailable": "Camera không khả dụng ở đây. Hãy nhập mã thay thế."
+  },
+  "apiError": {
+    "COMMON_VALIDATION_FAILED": "Dữ liệu không hợp lệ",
+    "AUTH_INVALID_CREDENTIALS": "Email hoặc mật khẩu không đúng",
+    "AUTH_LOGIN_REQUIRED": "Cần đăng nhập để xác minh OTP đổi mật khẩu",
+    "AUTH_ACCOUNT_NOT_FOUND": "Không tìm thấy tài khoản",
+    "AUTH_ACCOUNT_UNAVAILABLE": "Tài khoản không khả dụng",
+    "AUTH_ACCOUNT_INACTIVE": "Tài khoản không hoạt động",
+    "AUTH_EMAIL_EXISTS": "Email đã tồn tại",
+    "AUTH_EMAIL_INVALID": "Địa chỉ email không hợp lệ",
+    "AUTH_EMAIL_DOMAIN_NOT_ALLOWED": "Tên miền email này không được phép",
+    "AUTH_EMAIL_DISPOSABLE": "Không cho phép email dùng một lần",
+    "AUTH_EMAIL_REQUIRED_FOR_RESET": "Cần nhập email để xác minh OTP đặt lại mật khẩu",
+    "AUTH_EMAIL_SEND_FAILED": "Không gửi được email xác minh",
+    "AUTH_PASSWORD_MISMATCH": "Mật khẩu xác nhận không khớp",
+    "AUTH_PASSWORD_UNCHANGED": "Mật khẩu mới phải khác mật khẩu hiện tại",
+    "AUTH_RESET_INVALID": "Yêu cầu đặt lại mật khẩu không hợp lệ",
+    "AUTH_REFRESH_TOKEN_INVALID": "Phiên đăng nhập không hợp lệ, hãy đăng nhập lại",
+    "AUTH_OTP_REQUIRED": "Cần có mã OTP email",
+    "AUTH_OTP_INVALID": "Mã OTP email không đúng",
+    "AUTH_OTP_EXPIRED": "Mã OTP email đã hết hạn",
+    "AUTH_OTP_ATTEMPTS_EXCEEDED": "Đã nhập sai OTP quá số lần cho phép; hãy yêu cầu mã mới",
+    "AUTH_OTP_RESEND_TOO_SOON": "Chỉ có thể gửi lại OTP sau {{seconds}} giây",
+    "AUTH_OTP_SEND_LIMIT": "Đã vượt quá số lần gửi OTP",
+    "AUTH_GOOGLE_TOKEN_INVALID": "Mã đăng nhập Google không hợp lệ",
+    "AUTH_GOOGLE_EMAIL_UNVERIFIED": "Email của tài khoản Google chưa được xác minh",
+    "AUTH_GOOGLE_EMAIL_MISSING": "Mã đăng nhập Google không có email",
+    "COMMON_INVALID_ID": "Mã định danh không hợp lệ",
+    "COMMON_FIELD_REQUIRED": "{{field}} không được để trống",
+    "ROOM_NOT_FOUND": "Không tìm thấy phòng",
+    "ROOM_ADD_DEVICE_FORBIDDEN": "Bạn không thể thêm thiết bị vào phòng này",
+    "ROOM_ID_REQUIRED": "Thiếu mã phòng",
+    "HUB_NOT_FOUND": "Không tìm thấy hub",
+    "HUB_REMOVE_FORBIDDEN": "Bạn không thể xoá thiết bị này",
+    "HUB_EDIT_FORBIDDEN": "Bạn không thể sửa thiết bị này",
+    "DEVICE_NOT_FOUND": "Không tìm thấy thiết bị",
+    "DEVICE_REMOVE_FORBIDDEN": "Bạn không thể xoá thiết bị này",
+    "DEVICE_EDIT_FORBIDDEN": "Bạn không thể sửa thiết bị này",
+    "DEVICE_CONTROL_ONLY": "Bạn chỉ có thể điều khiển thiết bị này, không thể cấu hình nó",
+    "DEVICE_HUB_NOT_OWNED": "Hub đó thuộc về người khác",
+    "DEVICE_ATTRIBUTES_TOO_LARGE": "Thuộc tính thiết bị quá lớn",
+    "DEVICE_OWNER_ONLY_FIELD": "Chỉ chủ sở hữu mới được đổi {{field}}",
+    "SCENE_NOT_FOUND": "Không tìm thấy cảnh",
+    "SCENE_DEVICE_CONTROL_ONLY": "Bạn không thể đưa vào tự động hoá một thiết bị chỉ được chia sẻ để điều khiển",
+    "SCHEDULE_NOT_FOUND": "Không tìm thấy lịch",
+    "SCHEDULE_SCENE_NOT_FOUND": "Không tìm thấy cảnh: {{sceneId}}",
+    "NOTIFICATION_NOT_FOUND": "Không tìm thấy thông báo",
+    "SHARE_NOT_FOUND": "Không tìm thấy chia sẻ",
+    "SHARE_NOTHING": "Chưa chọn gì để chia sẻ",
+    "SHARE_DEVICE_ID_REQUIRED": "Thiếu mã thiết bị",
+    "SHARE_CODE_INVALID": "Mã này không còn hợp lệ",
+    "SHARE_OWN_INVITE": "Đây là lời mời của chính bạn"
+  },
+  "authCallback": {
+    "signingIn": "Đang đăng nhập cho bạn…",
+    "failed": "Đăng nhập chưa hoàn tất",
+    "backToLogin": "Về trang đăng nhập"
+  }
+}

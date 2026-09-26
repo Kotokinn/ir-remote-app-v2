@@ -1,15 +1,19 @@
-import { fetch } from "@tauri-apps/plugin-http";
+import { appFetch } from "@/lib/api/fetch";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { ApiError, type ApiErrorBody } from "@/lib/api/auth";
 import { API_BASE_URL } from "@/lib/api/config";
 
 export { ApiError };
 
+// A server that accepts the connection and then never answers must not hang a caller forever (the
+// sync outbox retries anything that fails, so a timeout has to look like a failure to it).
+const REQUEST_TIMEOUT_MS = 20_000;
+
 async function rawRequest(path: string, options: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  return appFetch(`${API_BASE_URL}${path}`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...options, headers });
 }
 
 async function toResult<T>(response: Response): Promise<T> {
@@ -27,13 +31,20 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   let response = await rawRequest(path, options, state.accessToken);
 
   if (response.status === 401 && state.refreshToken) {
+    let newToken: string;
     try {
-      const newToken = await state.refreshAccessToken();
-      response = await rawRequest(path, options, newToken);
-    } catch {
-      state.logout();
-      throw new ApiError(401);
+      newToken = await state.refreshAccessToken();
+    } catch (refreshError) {
+      // Only a refresh token the server actually rejects ends the session. A network failure or a server
+      // error while refreshing says nothing about the session — signing out then would throw the user out
+      // (and strand their unsynced changes) just because the connection dropped at the wrong moment.
+      if (refreshError instanceof ApiError && refreshError.status >= 400 && refreshError.status < 500) {
+        state.logout();
+        throw new ApiError(401);
+      }
+      throw refreshError;
     }
+    response = await rawRequest(path, options, newToken);
   }
 
   return toResult<T>(response);

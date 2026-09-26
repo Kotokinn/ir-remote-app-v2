@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 const SIZE = 180; // px — both the canvas resolution and the displayed size.
@@ -72,6 +73,7 @@ export function ColorWheel({
   onChange: (hex: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -146,7 +148,7 @@ export function ColorWheel({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       role="slider"
-      aria-label="Color wheel"
+      aria-label={t("device.colorWheel")}
       aria-disabled={disabled}
       aria-valuetext={color}
       className={cn(

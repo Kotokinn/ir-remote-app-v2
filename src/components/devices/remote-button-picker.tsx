@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Drawer,
   DrawerContent,
@@ -11,6 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   REMOTE_BUTTON_GROUPS,
+  remoteButtonLabel,
   type RemoteButtonPreset,
 } from "@/lib/remote-buttons";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,7 @@ export function RemoteButtonPicker({
   onPick: (preset: RemoteButtonPreset) => void;
   onPickCustom?: (label: string) => void;
 }) {
+  const { t } = useTranslation();
   const [customLabel, setCustomLabel] = useState("");
   const groups = REMOTE_BUTTON_GROUPS.filter((g) =>
     presets.some((p) => p.group === g.id)
@@ -58,10 +61,10 @@ export function RemoteButtonPicker({
               )}
             >
               {learned && (
-                <Check className="absolute top-1 right-1 size-3 text-primary" />
+                <Check className="absolute top-1 end-1 size-3 text-primary" />
               )}
               <Icon className="size-5" />
-              {preset.label}
+              {remoteButtonLabel(preset.id, preset.label)}
             </button>
           );
         })}
@@ -73,7 +76,7 @@ export function RemoteButtonPicker({
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="sm:inset-x-0 sm:bottom-6 sm:mx-auto sm:max-w-md sm:rounded-2xl">
         <DrawerHeader>
-          <DrawerTitle>Add a button</DrawerTitle>
+          <DrawerTitle>{t("remotePicker.title")}</DrawerTitle>
         </DrawerHeader>
 
         {flat ? (
@@ -83,7 +86,7 @@ export function RemoteButtonPicker({
             <TabsList className="mx-4 w-[calc(100%-2rem)]">
               {groups.map((g) => (
                 <TabsTrigger key={g.id} value={g.id} className="text-[11px]">
-                  {g.label}
+                  {t(g.labelKey)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -102,7 +105,7 @@ export function RemoteButtonPicker({
               onChange={(e) => {
                 setCustomLabel(e.target.value);
               }}
-              placeholder="Custom button name"
+              placeholder={t("remotePicker.customPlaceholder")}
               className="h-10 flex-1 rounded-xl border border-border px-3 text-sm outline-none focus:border-primary"
             />
             <button
@@ -115,7 +118,7 @@ export function RemoteButtonPicker({
               className="flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-40"
             >
               <Sparkles className="size-3.5" />
-              Add
+              {t("common.add")}
             </button>
           </div>
         )}

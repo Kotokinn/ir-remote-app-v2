@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertCircle, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { CATEGORIES, type CategoryId, type Device } from "@/lib/mock-data";
 import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useHubsStore, getPhysicalDevice } from "@/lib/store/hubs-store";
@@ -33,13 +34,14 @@ export function RelaySetup({
   hubId: string;
   onDone: (devices: Device[]) => void;
 }) {
+  const { t } = useTranslation();
   const rooms = useRoomsStore((s) => s.rooms);
   const physicalDevices = useHubsStore((s) => s.physicalDevices);
   const hubDeviceId = getPhysicalDevice(physicalDevices, hubId)?.deviceId;
   const defaultRoomId = roomId !== "all" ? roomId : (rooms[0]?.id ?? "");
   const [rows, setRows] = useState<RelayRow[]>(
     Array.from({ length: 8 }, (_, i) => ({
-      name: `Relay ${i + 1}`,
+      name: t("relaySetup.defaultName", { n: i + 1 }),
       categoryId: "switches",
       roomId: defaultRoomId,
       tested: false,
@@ -54,7 +56,7 @@ export function RelaySetup({
 
   async function testRow(index: number) {
     if (!hubDeviceId) {
-      updateRow(index, { error: "This hub isn't paired over the network yet." });
+      updateRow(index, { error: t("relaySetup.notPaired") });
       return;
     }
     setTestingIndex(index);
@@ -69,7 +71,7 @@ export function RelaySetup({
       updateRow(index, { tested: true });
     } catch (error) {
       updateRow(index, {
-        error: error instanceof Error ? error.message : "Couldn't reach the relay module.",
+        error: error instanceof Error ? error.message : t("relaySetup.unreachable"),
       });
     } finally {
       setTestingIndex(null);
@@ -79,7 +81,7 @@ export function RelaySetup({
   function finish() {
     const devices: Device[] = rows.map((row, i) => ({
       id: newDeviceId(i),
-      name: row.name.trim() || `Relay ${i + 1}`,
+      name: row.name.trim() || t("relaySetup.defaultName", { n: i + 1 }),
       roomId: row.roomId || defaultRoomId,
       categoryId: row.categoryId,
       isOn: false,
@@ -93,7 +95,7 @@ export function RelaySetup({
   return (
     <div className="flex flex-col gap-4">
       <p className="px-1 text-sm text-muted-foreground">
-        Name each of the 8 channels and pick where they belong.
+        {t("relaySetup.intro")}
       </p>
 
       <div className="flex flex-col gap-3">
@@ -114,16 +116,16 @@ export function RelaySetup({
                 disabled={testingIndex === i}
                 className="h-9 shrink-0 rounded-lg bg-muted px-3 text-xs font-semibold text-foreground/70 disabled:opacity-60"
               >
-                {testingIndex === i ? "…" : row.tested ? "Tested ✓" : "Test"}
+                {testingIndex === i ? "…" : row.tested ? t("relaySetup.tested") : t("relaySetup.test")}
               </button>
             </div>
             {row.error && (
-              <p className="flex items-start gap-1.5 pl-10 text-[11px] text-destructive">
+              <p className="flex items-start gap-1.5 ps-10 text-[11px] text-destructive">
                 <AlertCircle className="mt-0.5 size-3 shrink-0" />
                 {row.error}
               </p>
             )}
-            <div className="flex gap-2 pl-10">
+            <div className="flex gap-2 ps-10">
               <select
                 value={row.categoryId}
                 onChange={(e) => { updateRow(i, { categoryId: e.target.value as CategoryId }); }}
@@ -131,7 +133,7 @@ export function RelaySetup({
               >
                 {Object.values(CATEGORIES).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {t(c.nameKey)}
                   </option>
                 ))}
               </select>
@@ -156,7 +158,7 @@ export function RelaySetup({
         onClick={finish}
         className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
       >
-        Finish setup
+        {t("relaySetup.finish")}
       </button>
     </div>
   );

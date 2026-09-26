@@ -4,13 +4,16 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "@/lib/i18n/errors";
 import { useScenesStore } from "@/lib/store/scenes-store";
 import { useSchedulesStore } from "@/lib/store/schedules-store";
+import { weekdayNames } from "@/lib/i18n/format";
 import { cn } from "@/lib/utils";
 
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-
 function ScheduleFormContent() {
+  const { t, i18n } = useTranslation();
+  const weekdays = weekdayNames(i18n.language, "narrow");
   const router = useRouter();
   const searchParams = useSearchParams();
   const scheduleId = searchParams.get("id");
@@ -19,7 +22,7 @@ function ScheduleFormContent() {
   const updateSchedule = useSchedulesStore((s) => s.updateSchedule);
   const existing = useSchedulesStore((s) => s.schedules.find((sc) => sc.id === scheduleId));
 
-  const [name, setName] = useState(existing?.name ?? "New schedule");
+  const [name, setName] = useState(existing?.name ?? t("scheduleForm.newName"));
   const [sceneId, setSceneId] = useState(existing?.sceneId ?? scenes.at(0)?.id ?? "");
   const [startAt, setStartAt] = useState(existing?.startAt ?? "08:00");
   const [hasEnd, setHasEnd] = useState(existing?.hasEnd ?? false);
@@ -37,7 +40,7 @@ function ScheduleFormContent() {
 
   async function save() {
     const payload = {
-      name: name.trim() || "Schedule",
+      name: name.trim() || t("scheduleForm.defaultName"),
       sceneId,
       startAt,
       days,
@@ -55,7 +58,7 @@ function ScheduleFormContent() {
       }
       router.push("/automation");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save schedule");
+      setError(errorMessage(err, t("scheduleForm.saveFailed")));
       setSaving(false);
     }
   }
@@ -63,15 +66,15 @@ function ScheduleFormContent() {
   if (scenes.length === 0) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-4 pt-16 text-center lg:px-8">
-        <p className="text-sm font-medium">You need a scene first</p>
+        <p className="text-sm font-medium">{t("scheduleForm.needScene")}</p>
         <p className="text-xs text-muted-foreground">
-          Schedules run an existing scene at a set time — create one first.
+          {t("scheduleForm.needSceneHint")}
         </p>
         <Link
           href="/automation/scene"
           className="mt-1 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-primary-foreground"
         >
-          Create a scene
+          {t("automation.createScene")}
         </Link>
       </div>
     );
@@ -86,7 +89,7 @@ function ScheduleFormContent() {
             router.back();
           }}
           className="flex size-8 items-center justify-center rounded-full text-foreground/70 hover:bg-muted"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <X className="size-5" />
         </button>
@@ -98,7 +101,7 @@ function ScheduleFormContent() {
           disabled={saving}
           className="text-sm font-semibold text-primary disabled:opacity-40"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("addDevice.saving") : t("common.save")}
         </button>
       </div>
 
@@ -110,13 +113,13 @@ function ScheduleFormContent() {
           onChange={(e) => {
             setName(e.target.value);
           }}
-          placeholder="Schedule name"
+          placeholder={t("scheduleForm.namePlaceholder")}
           className="flex-1 bg-transparent text-sm font-medium outline-none"
         />
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Scene to run</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("scheduleForm.sceneToRun")}</span>
         <select
           value={sceneId}
           onChange={(e) => {
@@ -133,7 +136,7 @@ function ScheduleFormContent() {
       </label>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Start at</span>
+        <span className="text-sm text-muted-foreground">{t("scheduleForm.startAt")}</span>
         <input
           type="time"
           value={startAt}
@@ -146,9 +149,9 @@ function ScheduleFormContent() {
 
       <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border">
         <div className="flex flex-col">
-          <span className="text-sm font-medium">Also revert at a time</span>
+          <span className="text-sm font-medium">{t("scheduleForm.revertTitle")}</span>
           <span className="text-xs text-muted-foreground">
-            Undo the scene automatically after this window
+            {t("scheduleForm.revertHint")}
           </span>
         </div>
         <button
@@ -157,17 +160,17 @@ function ScheduleFormContent() {
             setHasEnd((v) => !v);
           }}
           className={cn(
-            "h-7 min-w-14 shrink-0 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 shrink-0 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             hasEnd ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {hasEnd ? "ON" : "OFF"}
+          {hasEnd ? t("common.on") : t("common.off")}
         </button>
       </div>
 
       {hasEnd && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">End at</span>
+          <span className="text-sm text-muted-foreground">{t("scheduleForm.endAt")}</span>
           <input
             type="time"
             value={endAt}
@@ -180,9 +183,9 @@ function ScheduleFormContent() {
       )}
 
       <div className="flex flex-col items-center gap-3">
-        <span className="text-sm text-muted-foreground">Repeat</span>
+        <span className="text-sm text-muted-foreground">{t("alarmSetup.repeat")}</span>
         <div className="flex gap-2">
-          {WEEKDAYS.map((day, i) => (
+          {weekdays.map((day, i) => (
             <button
               key={`${day}-${i}`}
               type="button"
@@ -203,18 +206,18 @@ function ScheduleFormContent() {
       </div>
 
       <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border">
-        <span className="text-sm font-medium">Enabled</span>
+        <span className="text-sm font-medium">{t("scheduleForm.enabled")}</span>
         <button
           type="button"
           onClick={() => {
             setEnabled((v) => !v);
           }}
           className={cn(
-            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             enabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {enabled ? "ON" : "OFF"}
+          {enabled ? t("common.on") : t("common.off")}
         </button>
       </div>
     </div>

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { AlertCircle, Loader2, ThermometerSun } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Device } from "@/lib/mock-data";
-import { AC_FALLBACK_BUTTONS, type RemoteButton, type RemoteButtonPreset } from "@/lib/remote-buttons";
+import { AC_FALLBACK_BUTTONS, remoteButtonLabel, type RemoteButton, type RemoteButtonPreset } from "@/lib/remote-buttons";
 import type { AcState } from "@/components/devices/ac-control-panel";
 import { AC_BRANDS, type AcBrand } from "@/lib/device/ac-brands";
 import { buildSendAcCommand } from "@/lib/device/commands";
@@ -30,6 +31,7 @@ export function AcSetup({
   hubId: string;
   onDone: (device: Device) => void;
 }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>("brand");
   const [brand, setBrand] = useState<AcBrand | null>(null);
   const [variantIndex, setVariantIndex] = useState(0);
@@ -50,7 +52,7 @@ export function AcSetup({
     setSendError("");
     if (!hubDeviceId) {
       setSendState("failed");
-      setSendError("This hub isn't paired over the network yet, so nothing could be sent to it.");
+      setSendError(t("acSetup.notPaired"));
       return;
     }
     setSendState("sending");
@@ -59,7 +61,7 @@ export function AcSetup({
       setSendState("sent");
     } catch (error) {
       setSendState("failed");
-      setSendError(error instanceof Error ? error.message : "Couldn't send the test signal.");
+      setSendError(error instanceof Error ? error.message : t("acSetup.testFailedDefault"));
     }
   }
 
@@ -91,7 +93,7 @@ export function AcSetup({
   function confirmTestWorked() {
     if (!brand) return;
     setProtocol(brand.protocols[variantIndex]);
-    setName(`${brand.label} AC`);
+    setName(t("acSetup.defaultNameBrand", { brand: brand.label }));
     setResultKind("ac");
     setStep("naming");
   }
@@ -106,7 +108,7 @@ export function AcSetup({
       setLearning(false);
       if (learnIndex + 1 >= AC_FALLBACK_BUTTONS.length) {
         setResultKind("remote");
-        setName("My AC");
+        setName(t("acSetup.myAc"));
         setStep("naming");
       } else {
         setLearnIndex((i) => i + 1);
@@ -117,7 +119,7 @@ export function AcSetup({
   function finish() {
     const base = {
       id: newDeviceId(),
-      name: name.trim() || "Air conditioner",
+      name: name.trim() || t("addDevice.functions.ac.title"),
       roomId,
       categoryId: "hvac" as const,
       isOn: false,
@@ -133,7 +135,7 @@ export function AcSetup({
   if (step === "brand") {
     return (
       <div className="flex flex-col gap-3">
-        <p className="px-1 text-sm text-muted-foreground">Select your AC brand</p>
+        <p className="px-1 text-sm text-muted-foreground">{t("acSetup.selectBrand")}</p>
         <div className="grid grid-cols-2 gap-2">
           {AC_BRANDS.map((b) => (
             <button
@@ -153,7 +155,7 @@ export function AcSetup({
           onClick={() => { setStep("fallback-learn"); }}
           className="mt-2 text-center text-sm font-medium text-primary"
         >
-          Can&apos;t find my brand — learn manually
+          {t("acSetup.cantFind")}
         </button>
       </div>
     );
@@ -169,9 +171,9 @@ export function AcSetup({
           <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <ThermometerSun className="size-6" />
           </span>
-          <p className="text-sm font-medium">None of the {brand.label} codes worked</p>
+          <p className="text-sm font-medium">{t("acSetup.noneWorked", { brand: brand.label })}</p>
           <p className="text-xs text-muted-foreground">
-            We tried all {total} known {brand.label} variant{total === 1 ? "" : "s"}. Check that the hub is pointed at the AC, or teach it from your remote.
+            {t("acSetup.triedAll", { count: total, brand: brand.label })}
           </p>
           <div className="flex w-full flex-col gap-2">
             <button
@@ -179,21 +181,21 @@ export function AcSetup({
               onClick={restartVariants}
               className="h-11 rounded-xl bg-muted text-sm font-semibold text-foreground/80"
             >
-              Try {brand.label} codes again
+              {t("acSetup.retryBrand", { brand: brand.label })}
             </button>
             <button
               type="button"
               onClick={() => { setStep("fallback-learn"); }}
               className="h-11 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
             >
-              Learn manually
+              {t("acSetup.learnManually")}
             </button>
             <button
               type="button"
               onClick={() => { setStep("brand"); }}
               className="text-sm font-medium text-primary"
             >
-              Pick another brand
+              {t("acSetup.pickAnother")}
             </button>
           </div>
         </div>
@@ -207,9 +209,9 @@ export function AcSetup({
         <div className="flex flex-col items-center gap-4 pt-10 text-center">
           <Loader2 className="size-10 animate-spin text-primary" />
           <p className="text-sm font-medium">
-            Testing {brand.label} · code {variantIndex + 1} of {total}…
+            {t("acSetup.testing", { brand: brand.label, index: variantIndex + 1, total })}
           </p>
-          <p className="text-xs text-muted-foreground">Sending a signal to turn your AC on (cool, 24°).</p>
+          <p className="text-xs text-muted-foreground">{t("acSetup.testingHint")}</p>
         </div>
       );
     }
@@ -220,7 +222,7 @@ export function AcSetup({
           <span className="flex size-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertCircle className="size-6" />
           </span>
-          <p className="text-sm font-medium">Couldn&apos;t send the test signal</p>
+          <p className="text-sm font-medium">{t("acSetup.sendFailed")}</p>
           <p className="text-xs text-muted-foreground">{sendError}</p>
           <div className="flex w-full gap-3">
             <button
@@ -228,14 +230,14 @@ export function AcSetup({
               onClick={() => { setStep("brand"); }}
               className="h-11 flex-1 rounded-xl bg-muted text-sm font-semibold text-foreground/70"
             >
-              Back
+              {t("common.back")}
             </button>
             <button
               type="button"
               onClick={() => { void sendTest(current); }}
               className="h-11 flex-1 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
             >
-              Try again
+              {t("common.tryAgain")}
             </button>
           </div>
         </div>
@@ -248,10 +250,10 @@ export function AcSetup({
           <ThermometerSun className="size-6" />
         </span>
         <p className="text-sm font-medium">
-          Signal sent · {brand.label} code {variantIndex + 1} of {total}. Did your AC respond?
+          {t("acSetup.signalSent", { brand: brand.label, index: variantIndex + 1, total })}
         </p>
         <p className="text-xs text-muted-foreground">
-          Check the AC itself — did it turn on or beep just now? Confirm by hand, it won&apos;t detect this automatically.
+          {t("acSetup.checkAc")}
         </p>
         <div className="flex w-full gap-3">
           <button
@@ -259,14 +261,14 @@ export function AcSetup({
             onClick={tryNextVariant}
             className="h-11 flex-1 rounded-xl bg-muted text-sm font-semibold text-foreground/70"
           >
-            {variantIndex + 1 < total ? "No, try next code" : "No, none worked"}
+            {variantIndex + 1 < total ? t("acSetup.nextCode") : t("acSetup.noneWorkedShort")}
           </button>
           <button
             type="button"
             onClick={confirmTestWorked}
             className="h-11 flex-1 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
           >
-            Yes, it worked
+            {t("acSetup.yesWorked")}
           </button>
         </div>
         <button
@@ -274,14 +276,14 @@ export function AcSetup({
           onClick={() => { void sendTest(current); }}
           className="text-center text-sm font-medium text-primary"
         >
-          Send again
+          {t("acSetup.sendAgain")}
         </button>
         <button
           type="button"
           onClick={() => { setStep("fallback-learn"); }}
           className="text-center text-sm font-medium text-primary"
         >
-          None of these worked — learn manually
+          {t("acSetup.noneOfThese")}
         </button>
       </div>
     );
@@ -292,13 +294,13 @@ export function AcSetup({
     return (
       <div className="flex flex-col items-center gap-4 pt-8 text-center">
         <p className="text-sm text-muted-foreground">
-          Button {learnIndex + 1} of {AC_FALLBACK_BUTTONS.length}
+          {t("acSetup.buttonN", { index: learnIndex + 1, total: AC_FALLBACK_BUTTONS.length })}
         </p>
         <span className="flex size-16 items-center justify-center rounded-full bg-accent text-primary">
           <preset.icon className="size-7" />
         </span>
         <p className="text-sm font-medium">
-          Point the original remote at the hub and press &quot;{preset.label}&quot;
+          {t("remoteSetup.pointRemote", { label: remoteButtonLabel(preset.id, preset.label) })}
         </p>
         <button
           type="button"
@@ -306,7 +308,7 @@ export function AcSetup({
           onClick={() => { learnButton(preset); }}
           className="h-11 w-full rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
         >
-          {learning ? "Learning…" : "Learn this button"}
+          {learning ? t("remoteSetup.learning") : t("acSetup.learnThis")}
         </button>
       </div>
     );
@@ -316,7 +318,7 @@ export function AcSetup({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2 pt-4 pb-2 text-center">
         <p className="text-sm font-medium">
-          {resultKind === "ac" ? "It works! Name your AC" : "All set — name your AC"}
+          {resultKind === "ac" ? t("acSetup.itWorks") : t("acSetup.allSet")}
         </p>
       </div>
       <input
@@ -329,7 +331,7 @@ export function AcSetup({
         onClick={finish}
         className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
       >
-        Finish
+        {t("addDevice.finish")}
       </button>
     </div>
   );

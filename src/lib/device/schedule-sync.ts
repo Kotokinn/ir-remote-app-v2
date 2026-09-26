@@ -11,6 +11,7 @@
 //    light/toggle devices have no firmware method yet, so they are skipped.
 //  - The firmware identifies a schedule by id (`s<appId>`), so re-sending overwrites and
 //    deleteSchedule removes exactly that one.
+import { t } from "@/lib/i18n";
 import { buildRgbCommands, buildSendAcCommand } from "@/lib/device/commands";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
 import { SHADE_COLORS, type Device, type Scene, type SceneAction, type Schedule } from "@/lib/mock-data";
@@ -35,8 +36,18 @@ interface FirmwareSchedule {
   endAction?: FirmwareAction[];
 }
 
+// The firmware keeps schedule ids in a 24-byte buffer (SCHEDULE_ID_SIZE), so a UUID doesn't fit. The id
+// the hub sees is derived from the app's id and must never change for a given schedule (re-sending
+// overwrites, deleteSchedule removes exactly that one): "s" + the UUID's first 12 hex digits — or, for a
+// schedule that predates client ids ("legacy-12"), the "s12" it has always had on the hubs.
+export function firmwareScheduleId(scheduleId: string): string {
+  const legacy = /^legacy-(\d+)$/.exec(scheduleId);
+  if (legacy) return `s${legacy[1]}`;
+  return `s${scheduleId.replace(/-/g, "").slice(0, 12)}`;
+}
+
 function firmwareId(schedule: Schedule): string {
-  return `s${schedule.id}`;
+  return firmwareScheduleId(schedule.id);
 }
 
 // The app's weekday index is 0=Monday..6=Sunday (schedule page); firmware uses 0=Sunday..6=Saturday.
@@ -225,5 +236,5 @@ export function removeScheduleFromHubs(schedule: Schedule, scene: Scene | undefi
 }
 
 export function syncFailureMessage(failedHubs: string[]): string {
-  return `Saved, but couldn't send it to: ${failedHubs.join(", ")}. Check the hub is online or nearby, then save again.`;
+  return t("errors.scheduleSyncFailed", { hubs: failedHubs.join(", ") });
 }

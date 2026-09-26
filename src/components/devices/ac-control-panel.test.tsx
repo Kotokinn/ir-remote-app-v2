@@ -113,7 +113,7 @@ describe("AcControlPanel: sleep mode debounce and sync", () => {
     });
 
     // The sleep toggle should now read OFF, and that local cancellation should itself be reported.
-    expect(screen.getByRole("button", { name: "Sleep mode" }).textContent).toBe("OFF");
+    expect(screen.getByRole("button", { name: "Sleep mode" }).textContent).toBe("Off");
     expect(onSleepChange).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
   });
 

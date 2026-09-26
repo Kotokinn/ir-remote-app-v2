@@ -3,10 +3,12 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { House } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 export default function SplashPage() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -24,8 +26,8 @@ export default function SplashPage() {
       <span className="flex size-20 items-center justify-center rounded-3xl bg-white/15">
         <House className="size-10" strokeWidth={1.6} />
       </span>
-      <h1 className="text-xl font-bold tracking-tight">Smart Home</h1>
-      <p className="text-sm text-white/80">Control every room, one tap away</p>
+      <h1 className="text-xl font-bold tracking-tight">{t("app.name")}</h1>
+      <p className="text-sm text-white/80">{t("app.tagline")}</p>
     </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Slider } from "@/components/ui/slider";
 import { SHADE_COLORS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ export function LightControlPanel({
   colorIndex?: number;
   onChange?: (state: LightState) => void;
 }) {
+  const { t } = useTranslation();
   const [isOn, setIsOn] = useState(initialOn);
   const [mode, setMode] = useState<(typeof MODES)[number]>(initialMode);
   const [intensity, setIntensity] = useState(initialIntensity);
@@ -50,11 +52,11 @@ export function LightControlPanel({
           type="button"
           onClick={() => { setIsOn((v) => !v); }}
           className={cn(
-            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             isOn ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {isOn ? "ON" : "OFF"}
+          {isOn ? t("common.on") : t("common.off")}
         </button>
       </div>
 
@@ -71,7 +73,7 @@ export function LightControlPanel({
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Mode</span>
+        <span className="text-sm text-muted-foreground">{t("light.modeLabel")}</span>
         <div className="flex items-center gap-1">
           {MODES.map((m) => (
             <button
@@ -79,20 +81,20 @@ export function LightControlPanel({
               type="button"
               onClick={() => { setMode(m); }}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors",
+                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 mode === m
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
-              {m}
+              {t(`light.mode.${m}`)}
             </button>
           ))}
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
-        <span className="text-sm text-muted-foreground">Intensity</span>
+        <span className="text-sm text-muted-foreground">{t("light.intensity")}</span>
         <Slider
           value={[intensity]}
           onValueChange={(value: number | readonly number[]) => {
@@ -106,14 +108,14 @@ export function LightControlPanel({
       </div>
 
       <div className="flex flex-col gap-3">
-        <span className="text-sm text-muted-foreground">Shades</span>
+        <span className="text-sm text-muted-foreground">{t("light.shades")}</span>
         <div className="grid grid-cols-6 gap-3">
           {SHADE_COLORS.map((c, i) => (
             <button
               key={c}
               type="button"
               onClick={() => { setColorIndex(i); }}
-              aria-label={`Shade ${i + 1}`}
+              aria-label={t("device.shade", { n: i + 1 })}
               className={cn(
                 "size-6 rounded-full ring-offset-2 ring-offset-background transition-shadow",
                 colorIndex === i && "ring-2 ring-foreground"

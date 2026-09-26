@@ -1,3 +1,5 @@
 - APP PROBLEMS:
     + chỉ 1 device trong quá trình ble
     + chưa đồng bộ config từ rs485/ble
+    + chua đồnh bộ relatime trạng thái thiết bị khi ở 2 platform khác nhau và tài khoản được shared
+    + Chưa có ble web, serial web

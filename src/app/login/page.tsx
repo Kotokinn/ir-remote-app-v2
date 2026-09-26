@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { errorMessage } from "@/lib/i18n/errors";
 import { signInWithGoogle } from "@/lib/auth/google-oauth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +21,7 @@ export default function LoginPage() {
       await signInWithGoogle();
       router.push("/home");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed");
+      setError(errorMessage(err, t("login.failed")));
     } finally {
       setLoading(false);
     }
@@ -30,9 +33,9 @@ export default function LoginPage() {
         <span className="flex size-14 items-center justify-center rounded-2xl bg-brand-gradient text-primary-foreground shadow-lg shadow-primary/20">
           <GoogleIcon className="size-7" />
         </span>
-        <h1 className="text-2xl font-bold">Welcome back</h1>
+        <h1 className="text-2xl font-bold">{t("login.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to control your smart home.
+          {t("login.subtitle")}
         </p>
       </div>
 
@@ -49,14 +52,13 @@ export default function LoginPage() {
         ) : (
           <GoogleIcon className="size-5" />
         )}
-        {loading ? "Signing in…" : "Continue with Google"}
+        {loading ? t("login.signingIn") : t("login.google")}
       </button>
 
       {error && <p className="text-center text-xs text-destructive">{error}</p>}
 
       <p className="text-center text-xs text-muted-foreground">
-        By continuing, you agree to let this app manage your smart home
-        devices.
+        {t("login.terms")}
       </p>
     </main>
   );

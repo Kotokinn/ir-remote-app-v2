@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Dialog,
   DialogContent,
@@ -14,18 +16,18 @@ import { parseInviteCode } from "@/lib/sharing";
 // jsQR cost grows with pixels; a phone camera frame is far more than a QR needs.
 const MAX_SCAN_WIDTH = 640;
 
-function describeCameraError(error: unknown): string {
+function describeCameraError(error: unknown, t: TFunction): string {
   const name = error instanceof DOMException ? error.name : "";
   if (name === "NotAllowedError" || name === "SecurityError") {
-    return "Camera access was denied. Allow it in your system settings, or type the code instead.";
+    return t("qrScan.denied");
   }
   if (name === "NotFoundError" || name === "OverconstrainedError") {
-    return "No camera found. Type the code instead.";
+    return t("qrScan.notFound");
   }
   if (name === "NotReadableError") {
-    return "The camera is being used by another app.";
+    return t("qrScan.busy");
   }
-  return "Couldn't start the camera. Type the code instead.";
+  return t("qrScan.failed");
 }
 
 /**
@@ -41,6 +43,7 @@ export function QrScanDialog({
   onOpenChange: (open: boolean) => void;
   onCode: (code: string) => void;
 }) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
   // The latest callbacks without restarting the camera every time the parent re-renders.
@@ -60,13 +63,13 @@ export function QrScanDialog({
       // Typed as always present, but a webview without secure-context camera support leaves it undefined.
       const mediaDevices = navigator.mediaDevices as MediaDevices | undefined;
       if (typeof mediaDevices?.getUserMedia !== "function") {
-        setError("The camera isn't available here. Type the code instead.");
+        setError(t("qrScan.unavailable"));
         return;
       }
       try {
         stream = await mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       } catch (cameraError) {
-        if (!cancelled) setError(describeCameraError(cameraError));
+        if (!cancelled) setError(describeCameraError(cameraError, t));
         return;
       }
       const video = videoRef.current;
@@ -112,14 +115,14 @@ export function QrScanDialog({
         track.stop();
       });
     };
-  }, [open]);
+  }, [open, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Scan invite code</DialogTitle>
-          <DialogDescription>Point the camera at the QR code on the other phone or screen.</DialogDescription>
+          <DialogTitle>{t("qrScan.title")}</DialogTitle>
+          <DialogDescription>{t("qrScan.description")}</DialogDescription>
         </DialogHeader>
         {error ? (
           <p className="rounded-xl bg-destructive/10 px-3 py-3 text-sm text-destructive">{error}</p>

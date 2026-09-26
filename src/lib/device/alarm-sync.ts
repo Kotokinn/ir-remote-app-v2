@@ -3,6 +3,7 @@
 // (docs/MQTT_API.md "setAlarm" / "setSchedule" — the doc itself suggests using setAlarm this way).
 // It does not go through the app's Scene/Schedule feature (Automation tab); this is its own,
 // simpler, per-device sync, independent of that one.
+import { t } from "@/lib/i18n";
 import { toFirmwareDay, hubLabel } from "@/lib/device/schedule-sync";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
 import type { Device } from "@/lib/mock-data";
@@ -24,7 +25,7 @@ export type AlarmSyncResult = { ok: true } | { ok: false; message: string };
 export async function syncAlarmToHub(device: Device): Promise<AlarmSyncResult> {
   const hub = getPhysicalDevice(useHubsStore.getState().physicalDevices, device.hubId);
   if (!hub?.deviceId) {
-    return { ok: false, message: "This hub isn't paired over the network yet, so the alarm wasn't sent to it." };
+    return { ok: false, message: t("errors.alarmNotPaired") };
   }
 
   const active = device.isOn && Boolean(device.alarmTime) && (device.alarmDays?.length ?? 0) > 0;
@@ -46,7 +47,7 @@ export async function syncAlarmToHub(device: Device): Promise<AlarmSyncResult> {
     return { ok: true };
   } catch (error) {
     console.error("[alarm] sync failed", error);
-    return { ok: false, message: `Couldn't reach ${hubLabel(hub.deviceId)}. The alarm may not ring as set.` };
+    return { ok: false, message: t("errors.alarmUnreachable", { hub: hubLabel(hub.deviceId) }) };
   }
 }
 

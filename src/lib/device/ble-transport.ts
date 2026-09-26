@@ -11,6 +11,7 @@
 //  - Fire-and-forget: notifications from the device are unreliable on Windows (see
 //    provisionWifi), so we never wait for a command response over BLE.
 import { sendString } from "@mnlphlp/plugin-blec";
+import { t } from "@/lib/i18n";
 import { useConnectionStore } from "@/lib/store/connection-store";
 import { commandRequestTopic } from "@/lib/device/device-profile";
 import {
@@ -53,7 +54,7 @@ async function ensureConnected(deviceId: string): Promise<void> {
   const hubs = await scanForHubs(SCAN_MS);
   const hub = hubs.find((candidate) => candidate.name === deviceId);
   if (!hub) {
-    throw new Error(`Device ${deviceId} not found over Bluetooth (out of range?)`);
+    throw new Error(t("errors.bleNotFound", { id: deviceId }));
   }
 
   await connectToHub(hub.address, () => {

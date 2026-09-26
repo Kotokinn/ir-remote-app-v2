@@ -3,11 +3,14 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "@/lib/i18n/errors";
 import { useScenesStore } from "@/lib/store/scenes-store";
 import type { SceneAction } from "@/lib/mock-data";
 import { SceneDeviceEditor } from "@/components/automation/scene-device-editor";
 
 function SceneFormContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const sceneId = searchParams.get("id");
@@ -15,7 +18,7 @@ function SceneFormContent() {
   const updateScene = useScenesStore((s) => s.updateScene);
   const existing = useScenesStore((s) => s.scenes.find((sc) => sc.id === sceneId));
 
-  const [name, setName] = useState(existing?.name ?? "New scene");
+  const [name, setName] = useState(existing?.name ?? t("sceneForm.newName"));
   const [actions, setActions] = useState<SceneAction[]>(existing?.actions ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +28,13 @@ function SceneFormContent() {
     setError(null);
     try {
       if (existing) {
-        await updateScene(existing.id, name.trim() || "Scene", actions);
+        await updateScene(existing.id, name.trim() || t("sceneForm.defaultName"), actions);
       } else {
-        await addScene(name.trim() || "Scene", actions);
+        await addScene(name.trim() || t("sceneForm.defaultName"), actions);
       }
       router.push("/automation");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save scene");
+      setError(errorMessage(err, t("sceneForm.saveFailed")));
       setSaving(false);
     }
   }
@@ -45,7 +48,7 @@ function SceneFormContent() {
             router.back();
           }}
           className="flex size-8 items-center justify-center rounded-full text-foreground/70 hover:bg-muted"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <X className="size-5" />
         </button>
@@ -57,7 +60,7 @@ function SceneFormContent() {
           disabled={actions.length === 0 || saving}
           className="text-sm font-semibold text-primary disabled:opacity-40"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("addDevice.saving") : t("common.save")}
         </button>
       </div>
 
@@ -69,13 +72,13 @@ function SceneFormContent() {
           onChange={(e) => {
             setName(e.target.value);
           }}
-          placeholder="Scene name"
+          placeholder={t("sceneForm.namePlaceholder")}
           className="flex-1 bg-transparent text-sm font-medium outline-none"
         />
       </div>
 
       <p className="px-1 text-xs text-muted-foreground">
-        Pick devices and set the state you want this scene to apply.
+        {t("sceneForm.hint")}
       </p>
 
       <SceneDeviceEditor initialActions={actions} onActionsChange={setActions} />

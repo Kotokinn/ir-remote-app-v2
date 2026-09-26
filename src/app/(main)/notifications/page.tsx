@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Bell, CalendarClock, Lock, Radio, Sparkles, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useNotificationsStore } from "@/lib/store/notifications-store";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
@@ -22,6 +23,7 @@ function iconFor(type: string): LucideIcon {
 }
 
 export default function NotificationsPage() {
+  const { t } = useTranslation();
   const notifications = useNotificationsStore((s) => s.notifications);
   const hydrated = useNotificationsStore((s) => s.hydrated);
   const loadFailed = useNotificationsStore((s) => s.loadFailed);
@@ -52,33 +54,33 @@ export default function NotificationsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
-      <h1 className="text-2xl font-bold">Notifications</h1>
+      <h1 className="text-2xl font-bold">{t("nav.notifications")}</h1>
 
       <OtaBanners />
 
       {loadFailed && (
         <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Couldn&apos;t refresh notifications. Check your connection; showing the last known list.
+          {t("notifications.refreshFailed")}
         </p>
       )}
 
       {deleteError && (
         <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Couldn&apos;t delete that notification. It was put back; try again.
+          {t("notifications.deleteFailed")}
         </p>
       )}
 
       {hydrated && !loadFailed && notifications.length === 0 && (
         <div className="flex flex-col items-center gap-1 pt-10 text-center">
-          <p className="text-sm font-medium">No notifications yet</p>
+          <p className="text-sm font-medium">{t("notifications.empty")}</p>
           <p className="text-xs text-muted-foreground">
-            Alerts such as a hub going offline or being updated will show up here.
+            {t("notifications.emptyHint")}
           </p>
         </div>
       )}
 
       {notifications.length > 0 && (
-        <p className="-mt-3 text-[11px] text-muted-foreground">Swipe a notification sideways to delete it.</p>
+        <p className="-mt-3 text-[11px] text-muted-foreground">{t("notifications.swipeHint")}</p>
       )}
 
       {/* overflow-x-clip: a row sliding off screen must not widen the page. */}
@@ -101,7 +103,7 @@ export default function NotificationsPage() {
                   if (!n.read) void markRead(n.id);
                 }}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-2xl bg-card px-4 py-3 text-left shadow-sm ring-1 ring-border",
+                  "flex w-full items-start gap-3 rounded-2xl bg-card px-4 py-3 text-start shadow-sm ring-1 ring-border",
                   n.read && "opacity-60"
                 )}
               >

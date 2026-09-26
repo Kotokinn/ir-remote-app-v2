@@ -93,8 +93,11 @@ export const useAuthStore = create<AuthState>()(
       name: "smart-home-auth",
       storage: createJSONStorage(() => window.localStorage),
       skipHydration: true,
-      onRehydrateStorage: () => (state) => {
-        if (state) state.hydrated = true;
+      // A real set, not `state.hydrated = true`: mutating the rehydrated object doesn't notify subscribers, so a
+      // component that already rendered (e.g. right after sign-in on the web, where nothing rehydrated the
+      // store before) would never see the flag flip. Also runs when the stored value is missing or unreadable.
+      onRehydrateStorage: () => () => {
+        useAuthStore.setState({ hydrated: true });
       },
       partialize: (state) => ({
         accessToken: state.accessToken,

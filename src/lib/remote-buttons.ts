@@ -23,6 +23,7 @@ import {
   VolumeX,
   type LucideIcon,
 } from "lucide-react";
+import { t, type TKey } from "@/lib/i18n";
 
 export type RemoteButtonGroupId =
   | "power"
@@ -46,13 +47,13 @@ export interface RemoteButton {
   group: RemoteButtonGroupId;
 }
 
-export const REMOTE_BUTTON_GROUPS: Array<{ id: RemoteButtonGroupId; label: string }> = [
-  { id: "power", label: "Power" },
-  { id: "nav", label: "Nav" },
-  { id: "volume", label: "Volume" },
-  { id: "playback", label: "Media" },
-  { id: "numbers", label: "Numbers" },
-  { id: "custom", label: "Custom" },
+export const REMOTE_BUTTON_GROUPS: Array<{ id: RemoteButtonGroupId; labelKey: TKey }> = [
+  { id: "power", labelKey: "remoteGroup.power" },
+  { id: "nav", labelKey: "remoteGroup.nav" },
+  { id: "volume", labelKey: "remoteGroup.volume" },
+  { id: "playback", labelKey: "remoteGroup.playback" },
+  { id: "numbers", labelKey: "remoteGroup.numbers" },
+  { id: "custom", labelKey: "remoteGroup.custom" },
 ];
 
 export const REMOTE_BUTTON_PRESETS: RemoteButtonPreset[] = [
@@ -96,6 +97,42 @@ REMOTE_BUTTON_ICON_MAP["ac-temp-up"] = Thermometer;
 REMOTE_BUTTON_ICON_MAP["ac-temp-down"] = Thermometer;
 REMOTE_BUTTON_ICON_MAP["ac-mode"] = Sparkles;
 REMOTE_BUTTON_ICON_MAP["ac-fan"] = Fan;
+
+const PRESET_LABEL_KEYS: Partial<Record<string, TKey>> = {
+  power: "remoteButton.power",
+  "nav-up": "remoteButton.nav-up",
+  "nav-down": "remoteButton.nav-down",
+  "nav-left": "remoteButton.nav-left",
+  "nav-right": "remoteButton.nav-right",
+  "nav-ok": "remoteButton.nav-ok",
+  "nav-back": "remoteButton.nav-back",
+  "nav-home": "remoteButton.nav-home",
+  "nav-menu": "remoteButton.nav-menu",
+  "vol-up": "remoteButton.vol-up",
+  "vol-down": "remoteButton.vol-down",
+  "vol-mute": "remoteButton.vol-mute",
+  "ch-up": "remoteButton.ch-up",
+  "ch-down": "remoteButton.ch-down",
+  "play-pause": "remoteButton.play-pause",
+  stop: "remoteButton.stop",
+  rewind: "remoteButton.rewind",
+  forward: "remoteButton.forward",
+  prev: "remoteButton.prev",
+  next: "remoteButton.next",
+  "ac-temp-up": "remoteButton.ac-temp-up",
+  "ac-temp-down": "remoteButton.ac-temp-down",
+  "ac-mode": "remoteButton.ac-mode",
+  "ac-fan": "remoteButton.ac-fan",
+};
+
+/**
+ * What to show on a button: the app's own presets are translated at display time (so a button learned
+ * in one language reads correctly in another); a custom button shows the name the user typed.
+ */
+export function remoteButtonLabel(iconKey: string, storedLabel: string): string {
+  const key = PRESET_LABEL_KEYS[iconKey];
+  return key ? t(key) : storedLabel;
+}
 
 export function getRemoteButtonIcon(iconKey: string): LucideIcon {
   return REMOTE_BUTTON_ICON_MAP[iconKey] ?? Sparkles;

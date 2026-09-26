@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Check, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ export function InviteDialog({
   invite: InviteResponse | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -61,11 +63,12 @@ export function InviteDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {invite?.targets.length === 1 ? `Share "${invite.targets[0].name}"` : `Share ${invite?.targets.length ?? 0} items`}
+            {invite?.targets.length === 1
+              ? t("household.inviteTitleOne", { name: invite.targets[0].name })
+              : t("household.inviteTitleMany", { count: invite?.targets.length ?? 0 })}
           </DialogTitle>
           <DialogDescription>
-            Scan the code with their phone&apos;s camera, or have them type it in Household → Join. It works once and
-            expires{invite ? ` ${new Date(invite.expiresAt).toLocaleString()}` : ""}.
+            {t("household.inviteHint", { when: invite ? new Date(invite.expiresAt).toLocaleString(i18n.language) : "" })}
           </DialogDescription>
         </DialogHeader>
         <ul className="flex flex-col gap-1 text-sm">
@@ -73,9 +76,7 @@ export function InviteDialog({
             <li key={`${target.scope}-${target.roomId ?? target.deviceId}`} className="flex items-baseline gap-2">
               <span className="truncate font-medium">{target.name}</span>
               <span className="text-xs text-muted-foreground">
-                {target.scope === "ROOM"
-                  ? "whole room — control it, automate it, add their own devices"
-                  : "control only"}
+                {target.scope === "ROOM" ? t("household.roomAccess") : t("household.deviceAccess")}
               </span>
             </li>
           ))}
@@ -83,7 +84,7 @@ export function InviteDialog({
         <div className="flex flex-col items-center gap-3 py-2">
           {qr ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt="Invite QR code" className="size-56 rounded-xl bg-white p-2" />
+            <img src={qr} alt={t("household.qrAlt")} className="size-56 rounded-xl bg-white p-2" />
           ) : (
             <div className="size-56 rounded-xl bg-muted" />
           )}

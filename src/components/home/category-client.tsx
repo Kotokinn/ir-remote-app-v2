@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getCategory, type Device } from "@/lib/mock-data";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { useRoomsStore } from "@/lib/store/rooms-store";
@@ -39,6 +40,7 @@ export function CategoryClient({
   categoryId: string;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const category = getCategory(categoryId);
   const allDevices = useDevicesStore((s) => s.devices);
   const updateDevice = useDevicesStore((s) => s.updateDevice);
@@ -105,9 +107,9 @@ export function CategoryClient({
   if (!category) {
     return (
       <div className="flex flex-col items-center gap-3 px-4 pt-16 text-center">
-        <p className="text-sm text-muted-foreground">Category not found.</p>
+        <p className="text-sm text-muted-foreground">{t("category.notFound")}</p>
         <Link href={`/home/room?id=${roomId}`} className="text-sm font-medium text-primary">
-          Back
+          {t("common.back")}
         </Link>
       </div>
     );
@@ -207,17 +209,17 @@ export function CategoryClient({
             router.back();
           }}
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/70 hover:bg-muted"
-          aria-label="Go back"
+          aria-label={t("common.back")}
         >
-          <ChevronLeft className="size-5" />
+          <ChevronLeft className="size-5 rtl:rotate-180" />
         </button>
-        <h1 className="flex-1 truncate text-lg font-semibold">{category.name}</h1>
+        <h1 className="flex-1 truncate text-lg font-semibold">{t(category.nameKey)}</h1>
         {commonHub && <TransportPicker hub={commonHub} />}
         {canAddDevicesTo(roomId, rooms) && (
           <Link
             href={`/home/add-device?room=${roomId}`}
             className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/70"
-            aria-label="Add device"
+            aria-label={t("category.addDeviceAria")}
           >
             <Plus className="size-4" />
           </Link>
@@ -229,7 +231,7 @@ export function CategoryClient({
           {hubsInView.map((hub) => (
             <div
               key={hub.id}
-              className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted py-1 pl-3 pr-1 text-xs font-medium text-foreground/70"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted py-1 ps-3 pe-1 text-xs font-medium text-foreground/70"
             >
               <span className="max-w-24 truncate">{hub.name}</span>
               <TransportPicker hub={hub} />
@@ -243,9 +245,9 @@ export function CategoryClient({
           <span className="flex size-12 items-center justify-center rounded-full bg-accent text-primary">
             <CategoryIcon className="size-6" />
           </span>
-          <p className="text-sm font-medium">No {category.name.toLowerCase()} devices yet</p>
+          <p className="text-sm font-medium">{t("category.emptyTitle", { category: t(category.nameKey) })}</p>
           <p className="text-xs text-muted-foreground">
-            Tap the + button to add a device to this category.
+            {t("category.emptyHint")}
           </p>
         </div>
       ) : allToggle ? (
@@ -253,7 +255,7 @@ export function CategoryClient({
           {relayStatusSyncing && (
             <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-2xl bg-background/70 text-xs font-medium text-muted-foreground backdrop-blur-[1px]">
               <Loader2 className="size-4 animate-spin" />
-              Checking current state…
+              {t("category.checkingState")}
             </div>
           )}
           {devices.map((device) => (
@@ -298,7 +300,7 @@ export function CategoryClient({
                   )}
                 >
                   {chipHub && (
-                    <span className="absolute top-1.5 right-1.5">
+                    <span className="absolute top-1.5 end-1.5">
                       <HubStatusDot hub={chipHub} />
                     </span>
                   )}
@@ -349,8 +351,7 @@ export function CategoryClient({
             {(selectedDevice.kind === "remote" || selectedDevice.kind === "alarm") &&
               !mayConfigure(selectedDevice) && (
                 <p className="rounded-xl bg-muted px-3 py-3 text-sm text-muted-foreground">
-                  {selectedDevice.name} was shared with you for control only, so its remote buttons and alarm
-                  can&apos;t be changed here.
+                  {t("category.controlOnly", { name: selectedDevice.name })}
                 </p>
               )}
             {selectedDevice.kind === "remote" && mayConfigure(selectedDevice) && (
@@ -369,7 +370,7 @@ export function CategoryClient({
                 {relayStatusSyncing && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-2xl bg-background/70 text-xs font-medium text-muted-foreground backdrop-blur-[1px]">
                     <Loader2 className="size-4 animate-spin" />
-                    Checking current state…
+                    {t("category.checkingState")}
                   </div>
                 )}
                 <ToggleDeviceRow
@@ -430,7 +431,7 @@ export function CategoryClient({
                 className="mt-4 flex items-center gap-1.5 text-sm font-medium text-destructive"
               >
                 <Trash2 className="size-4" />
-                Remove device
+                {t("category.removeDevice")}
               </button>
             )}
           </div>
@@ -442,8 +443,8 @@ export function CategoryClient({
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(undefined);
         }}
-        title={`Remove ${deleteTarget?.name ?? "this device"}?`}
-        description="This can't be undone."
+        title={t("room.removeTitle", { name: deleteTarget?.name ?? t("room.thisDevice") })}
+        description={t("common.cannotUndo")}
         onConfirm={() => {
           if (!deleteTarget) return;
           // The alarm's schedule lives on the hub itself (setSchedule/NVS); removing only the app's

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { InviteTarget } from "@/lib/api/smart";
 import type { Device } from "@/lib/mock-data";
 import type { UserRoom } from "@/lib/store/rooms-store";
@@ -52,6 +53,7 @@ export function ShareTree({
   /** Resolves true when the invite was made, so the selection can be cleared. */
   onShare: (targets: InviteTarget[]) => Promise<boolean>;
 }) {
+  const { t } = useTranslation();
   const [selectedRooms, setSelectedRooms] = useState<Set<string>>(new Set());
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -66,7 +68,7 @@ export function ShareTree({
     })),
     {
       id: NO_ROOM,
-      name: "Not in a room",
+      name: t("household.notInRoom"),
       isRoom: false,
       devices: devices.filter((device) => !roomIds.has(device.roomId)),
     },
@@ -102,7 +104,7 @@ export function ShareTree({
   }
 
   if (groups.length === 0) {
-    return <p className="rounded-2xl bg-card px-4 py-3 text-xs text-muted-foreground shadow-sm ring-1 ring-border">Add a room or a device first.</p>;
+    return <p className="rounded-2xl bg-card px-4 py-3 text-xs text-muted-foreground shadow-sm ring-1 ring-border">{t("household.addFirst")}</p>;
   }
 
   return (
@@ -119,7 +121,7 @@ export function ShareTree({
                   <Checkbox
                     checked={roomSelected}
                     indeterminate={!roomSelected && someDevicePicked}
-                    label={`Share the whole room ${group.name}`}
+                    label={t("household.shareRoomAria", { name: group.name })}
                     onChange={() => {
                       toggleRoom(group);
                     }}
@@ -132,12 +134,12 @@ export function ShareTree({
                   onClick={() => {
                     setCollapsed((current) => toggle(current, group.id));
                   }}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-start"
                   aria-expanded={open}
                 >
                   <span className="truncate text-sm font-medium">{group.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    {group.devices.length} device{group.devices.length === 1 ? "" : "s"}
+                    {t("home.deviceCount", { count: group.devices.length })}
                   </span>
                   <span className="flex-1" />
                   {open ? (
@@ -152,14 +154,14 @@ export function ShareTree({
                   <label
                     key={device.id}
                     className={cn(
-                      "flex items-center gap-3 border-t border-border/60 py-2.5 pr-4 pl-11 text-sm",
+                      "flex items-center gap-3 border-t border-border/60 py-2.5 pe-4 ps-11 text-sm",
                       roomSelected && "text-muted-foreground"
                     )}
                   >
                     <Checkbox
                       checked={roomSelected || selectedDevices.has(device.id)}
                       disabled={roomSelected}
-                      label={`Share ${device.name}`}
+                      label={t("household.shareDeviceAria", { name: device.name })}
                       onChange={() => {
                         setSelectedDevices((current) => toggle(current, device.id));
                       }}
@@ -181,7 +183,7 @@ export function ShareTree({
         className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground disabled:opacity-50"
       >
         {busy && <Loader2 className="size-4 animate-spin" />}
-        {count === 0 ? "Pick rooms or devices to share" : `Share ${count} selected`}
+        {count === 0 ? t("household.pickToShare") : t("household.shareSelected", { count })}
       </button>
     </div>
   );

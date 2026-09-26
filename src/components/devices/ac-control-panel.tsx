@@ -15,6 +15,8 @@ import {
   Snowflake,
   Wind,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TKey } from "@/lib/i18n";
 import type { AcMode, AcSleepSubject, AcSwing, FanSpeed } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +24,10 @@ import { cn } from "@/lib/utils";
 // real MQTT publish (setSleepMode) — see alarm-control-panel.tsx for the same problem/fix.
 const SLEEP_DEBOUNCE_MS = 700;
 
-const SLEEP_SUBJECTS: Array<{ id: AcSleepSubject; label: string }> = [
-  { id: "child", label: "Child" },
-  { id: "adult", label: "Adult" },
-  { id: "elder", label: "Elder" },
+const SLEEP_SUBJECTS: Array<{ id: AcSleepSubject; labelKey: TKey }> = [
+  { id: "child", labelKey: "ac.subject.child" },
+  { id: "adult", labelKey: "ac.subject.adult" },
+  { id: "elder", labelKey: "ac.subject.elder" },
 ];
 
 // docs/MQTT_API.md setSleepMode: firmware default sleep temperature when `targetTemp` is omitted.
@@ -48,12 +50,12 @@ function sleepStatesEqual(a: SleepState, b: SleepState): boolean {
   );
 }
 
-const MODES: Array<{ id: AcMode; label: string; icon: typeof Snowflake; color: string }> = [
-  { id: "cool", label: "Cool", icon: Snowflake, color: "#3b82f6" },
-  { id: "heat", label: "Heat", icon: Flame, color: "#f97316" },
-  { id: "fan", label: "Fan", icon: Wind, color: "#22c55e" },
-  { id: "auto", label: "Auto", icon: RefreshCw, color: "#a855f7" },
-  { id: "dry", label: "Dry", icon: Droplets, color: "#06b6d4" },
+const MODES: Array<{ id: AcMode; labelKey: TKey; icon: typeof Snowflake; color: string }> = [
+  { id: "cool", labelKey: "ac.mode.cool", icon: Snowflake, color: "#3b82f6" },
+  { id: "heat", labelKey: "ac.mode.heat", icon: Flame, color: "#f97316" },
+  { id: "fan", labelKey: "ac.mode.fan", icon: Wind, color: "#22c55e" },
+  { id: "auto", labelKey: "ac.mode.auto", icon: RefreshCw, color: "#a855f7" },
+  { id: "dry", labelKey: "ac.mode.dry", icon: Droplets, color: "#06b6d4" },
 ];
 
 // Order matches the firmware's ascending speed enum (auto=0, low=1, min=2, medium=3, high=4, max=5).
@@ -64,11 +66,11 @@ const FAN_SPEEDS: FanSpeed[] = ["auto", "low", "min", "medium", "high", "max"];
 // wraps back to the start, rather than picking from 4 spelled-out options. The icon shows the
 // louver angle at a glance (chevrons pointing to where it's aimed; a moving arrow for "auto", since
 // that position sweeps continuously instead of holding still).
-const SWING_SEQUENCE: Array<{ id: AcSwing; label: string; icon: typeof ChevronsUp }> = [
-  { id: "highest", label: "Highest", icon: ChevronsUp },
-  { id: "middle", label: "Middle", icon: Minus },
-  { id: "lowest", label: "Lowest", icon: ChevronsDown },
-  { id: "auto", label: "Auto", icon: MoveVertical },
+const SWING_SEQUENCE: Array<{ id: AcSwing; labelKey: TKey; icon: typeof ChevronsUp }> = [
+  { id: "highest", labelKey: "ac.swing.highest", icon: ChevronsUp },
+  { id: "middle", labelKey: "ac.swing.middle", icon: Minus },
+  { id: "lowest", labelKey: "ac.swing.lowest", icon: ChevronsDown },
+  { id: "auto", labelKey: "ac.swing.auto", icon: MoveVertical },
 ];
 
 function nextSwing(current: AcSwing): AcSwing {
@@ -121,6 +123,7 @@ export function AcControlPanel({
   onChange?: (state: AcState) => void;
   onSleepChange?: (state: SleepState) => void;
 }) {
+  const { t } = useTranslation();
   const [isOn, setIsOn] = useState(initialOn);
   const [acMode, setAcMode] = useState<AcMode>(initialMode);
   const [targetTemp, setTargetTemp] = useState(initialTemp);
@@ -215,21 +218,21 @@ export function AcControlPanel({
         <div className="flex flex-col">
           <span className="text-base font-semibold">{name}</span>
           {hubName && (
-            <span className="text-xs text-muted-foreground">via {hubName}</span>
+            <span className="text-xs text-muted-foreground">{t("device.via", { hub: hubName })}</span>
           )}
         </div>
         <button
           type="button"
-          aria-label="Power"
+          aria-label={t("device.power")}
           onClick={() => {
             setIsOn((v) => !v);
           }}
           className={cn(
-            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             isOn ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {isOn ? "ON" : "OFF"}
+          {isOn ? t("common.on") : t("common.off")}
         </button>
       </div>
 
@@ -248,11 +251,11 @@ export function AcControlPanel({
           <button
             type="button"
             onClick={() => {
-              setTargetTemp((t) => Math.max(16, t - 1));
+              setTargetTemp((temp) => Math.max(16, temp - 1));
             }}
             disabled={!isOn}
             className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-            aria-label="Decrease temperature"
+            aria-label={t("ac.decreaseTemp")}
           >
             <Minus className="size-4" />
           </button>
@@ -260,11 +263,11 @@ export function AcControlPanel({
           <button
             type="button"
             onClick={() => {
-              setTargetTemp((t) => Math.min(30, t + 1));
+              setTargetTemp((temp) => Math.min(30, temp + 1));
             }}
             disabled={!isOn}
             className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-            aria-label="Increase temperature"
+            aria-label={t("ac.increaseTemp")}
           >
             <Plus className="size-4" />
           </button>
@@ -273,7 +276,7 @@ export function AcControlPanel({
       </div>
 
       <div className="flex flex-col gap-3">
-        <span className="text-sm text-muted-foreground">Mode</span>
+        <span className="text-sm text-muted-foreground">{t("ac.modeLabel")}</span>
         <div className="flex justify-between gap-1">
           {MODES.map((m) => {
             const Icon = m.icon;
@@ -291,7 +294,7 @@ export function AcControlPanel({
                 )}
               >
                 <Icon className="size-4" />
-                {m.label}
+                {t(m.labelKey)}
               </button>
             );
           })}
@@ -299,7 +302,7 @@ export function AcControlPanel({
       </div>
 
       <div className="flex flex-col gap-3">
-        <span className="text-sm text-muted-foreground">Fan speed</span>
+        <span className="text-sm text-muted-foreground">{t("ac.fanSpeed")}</span>
         <div className="flex flex-wrap justify-end gap-1">
           {FAN_SPEEDS.map((speed) => (
             <button
@@ -309,13 +312,13 @@ export function AcControlPanel({
                 setFanSpeed(speed);
               }}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors",
+                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 fanSpeed === speed
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
-              {speed}
+              {t(`ac.fan.${speed}`)}
             </button>
           ))}
         </div>
@@ -324,18 +327,18 @@ export function AcControlPanel({
       <div className="flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm ring-1 ring-border">
         <div className="flex items-center gap-2">
           <ArrowUpDown className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Swing (vertical)</span>
+          <span className="text-sm font-medium">{t("ac.swingVertical")}</span>
         </div>
         <button
           type="button"
-          aria-label="Swing"
+          aria-label={t("ac.swingButton")}
           onClick={() => {
             setSwing(nextSwing);
           }}
           className="flex h-7 min-w-24 items-center justify-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition-colors"
         >
           <SwingIcon className="size-3.5" />
-          {currentSwing.label}
+          {t(currentSwing.labelKey)}
         </button>
       </div>
 
@@ -343,27 +346,27 @@ export function AcControlPanel({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Moon className="size-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Sleep mode</span>
+            <span className="text-sm font-medium">{t("ac.sleepMode")}</span>
           </div>
           <button
             type="button"
-            aria-label="Sleep mode"
+            aria-label={t("ac.sleepMode")}
             onClick={() => {
               setSleepEnabled((v) => !v);
             }}
             disabled={!isOn}
             className={cn(
-              "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors disabled:opacity-40",
+              "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors disabled:opacity-40",
               sleepEnabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             )}
           >
-            {sleepEnabled ? "ON" : "OFF"}
+            {sleepEnabled ? t("common.on") : t("common.off")}
           </button>
         </div>
 
         <div className={cn("flex flex-col gap-3", (!isOn || !sleepEnabled) && "opacity-40")}>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">For</span>
+            <span className="text-xs text-muted-foreground">{t("ac.sleepFor")}</span>
             <div className="flex gap-1">
               {SLEEP_SUBJECTS.map((subject) => (
                 <button
@@ -380,13 +383,13 @@ export function AcControlPanel({
                       : "text-muted-foreground hover:bg-muted"
                   )}
                 >
-                  {subject.label}
+                  {t(subject.labelKey)}
                 </button>
               ))}
             </div>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Wake at</span>
+            <span className="text-xs text-muted-foreground">{t("ac.wakeAt")}</span>
             <input
               type="time"
               value={sleepWakeTime}
@@ -398,7 +401,7 @@ export function AcControlPanel({
             />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Target temp</span>
+            <span className="text-xs text-muted-foreground">{t("ac.targetTemp")}</span>
             {sleepTargetTemp === undefined ? (
               <button
                 type="button"
@@ -408,7 +411,7 @@ export function AcControlPanel({
                 }}
                 className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground disabled:opacity-40"
               >
-                Default ({SLEEP_DEFAULT_TEMP[sleepSubject]}°)
+                {t("ac.defaultTemp", { temp: SLEEP_DEFAULT_TEMP[sleepSubject] })}
               </button>
             ) : (
               <div className="flex items-center gap-2">
@@ -416,10 +419,10 @@ export function AcControlPanel({
                   type="button"
                   disabled={!isOn || !sleepEnabled}
                   onClick={() => {
-                    setSleepTargetTemp((t) => Math.max(16, (t ?? SLEEP_DEFAULT_TEMP[sleepSubject]) - 1));
+                    setSleepTargetTemp((temp) => Math.max(16, (temp ?? SLEEP_DEFAULT_TEMP[sleepSubject]) - 1));
                   }}
                   className="flex size-6 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-                  aria-label="Decrease sleep temperature"
+                  aria-label={t("ac.decreaseSleepTemp")}
                 >
                   <Minus className="size-3" />
                 </button>
@@ -428,10 +431,10 @@ export function AcControlPanel({
                   type="button"
                   disabled={!isOn || !sleepEnabled}
                   onClick={() => {
-                    setSleepTargetTemp((t) => Math.min(30, (t ?? SLEEP_DEFAULT_TEMP[sleepSubject]) + 1));
+                    setSleepTargetTemp((temp) => Math.min(30, (temp ?? SLEEP_DEFAULT_TEMP[sleepSubject]) + 1));
                   }}
                   className="flex size-6 items-center justify-center rounded-full bg-muted text-foreground disabled:opacity-40"
-                  aria-label="Increase sleep temperature"
+                  aria-label={t("ac.increaseSleepTemp")}
                 >
                   <Plus className="size-3" />
                 </button>
@@ -443,7 +446,7 @@ export function AcControlPanel({
                   }}
                   className="text-xs font-medium text-muted-foreground underline disabled:opacity-40"
                 >
-                  Reset
+                  {t("ac.reset")}
                 </button>
               </div>
             )}

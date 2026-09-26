@@ -1,6 +1,8 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { API_BASE_URL } from "@/lib/api/config";
+import { t } from "@/lib/i18n";
+import { runsInApp } from "@/lib/platform";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 const APP_REDIRECT_SCHEME = "smarthome";
@@ -19,7 +21,7 @@ function waitForAppCallback(): Promise<{ accessToken: string | null; refreshToke
     let unlisten: (() => void) | undefined;
     const timer = setTimeout(() => {
       unlisten?.();
-      reject(new Error("Google sign-in timed out"));
+      reject(new Error(t("errors.googleTimeout")));
     }, SIGN_IN_TIMEOUT_MS);
 
     onOpenUrl((urls) => {
@@ -44,12 +46,21 @@ function waitForAppCallback(): Promise<{ accessToken: string | null; refreshToke
 }
 
 export async function signInWithGoogle(): Promise<void> {
+  if (!runsInApp()) {
+    // Browser: leave the page for Google (via auth-service) and come back to /auth/callback with the tokens in
+    // the URL fragment — auth-service only sends them to origins it has been told to trust.
+    const returnTo = `${window.location.origin}/auth/callback`;
+    window.location.assign(`${API_BASE_URL}/oauth2/authorization/google?return_to=${encodeURIComponent(returnTo)}`);
+    // The page is being replaced: never settle, so the sign-in button keeps showing "Signing in…".
+    return new Promise<void>(() => undefined);
+  }
+
   const callbackPromise = waitForAppCallback();
   await openUrl(`${API_BASE_URL}/oauth2/authorization/google`);
 
   const { accessToken, refreshToken, error } = await callbackPromise;
   if (error || !accessToken || !refreshToken) {
-    throw new Error(error ?? "Google sign-in was cancelled");
+    throw new Error(error ?? t("errors.googleCancelled"));
   }
 
   useAuthStore.getState().setSession(accessToken, refreshToken);

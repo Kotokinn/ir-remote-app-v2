@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { FAVORITES, type FavoriteDevice } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +15,7 @@ import {
 import { LightControlPanel } from "@/components/devices/light-control-panel";
 
 export default function FavoritesPage() {
+  const { t } = useTranslation();
   const [favorites, setFavorites] = useState<FavoriteDevice[]>(FAVORITES);
   const [openId, setOpenId] = useState<string | null>(null);
   const openDevice = favorites.find((f) => f.id === openId);
@@ -27,11 +29,11 @@ export default function FavoritesPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Favorites</h1>
+        <h1 className="text-2xl font-bold">{t("nav.favorites")}</h1>
         <button
           type="button"
           className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground/70"
-          aria-label="Add favorite"
+          aria-label={t("favorites.addAria")}
         >
           <Plus className="size-4" />
         </button>
@@ -52,7 +54,7 @@ export default function FavoritesPage() {
                 }
               }}
               className={cn(
-                "flex flex-col items-start gap-4 rounded-2xl p-4 text-left shadow-sm transition-colors",
+                "flex flex-col items-start gap-4 rounded-2xl p-4 text-start shadow-sm transition-colors",
                 device.isOn
                   ? "bg-brand-gradient text-primary-foreground"
                   : "bg-card text-foreground ring-1 ring-border"
@@ -60,14 +62,14 @@ export default function FavoritesPage() {
             >
               <span
                 className={cn(
-                  "text-[10px] font-semibold tracking-wide",
+                  "text-[10px] font-semibold tracking-wide uppercase",
                   device.isOn ? "text-white/80" : "text-muted-foreground"
                 )}
               >
-                {device.isOn ? "ON" : "OFF"}
+                {device.isOn ? t("common.on") : t("common.off")}
               </span>
               <Icon className="size-8" strokeWidth={1.6} />
-              <span className="text-sm font-medium">{device.name}</span>
+              <span className="text-sm font-medium">{t(device.nameKey)}</span>
             </button>
           );
         })}
@@ -81,14 +83,14 @@ export default function FavoritesPage() {
       >
         <DrawerContent className="sm:inset-x-0 sm:bottom-6 sm:mx-auto sm:max-w-md sm:rounded-2xl">
           <DrawerHeader>
-            <DrawerTitle className="sr-only">{openDevice?.name}</DrawerTitle>
+            <DrawerTitle className="sr-only">{openDevice ? t(openDevice.nameKey) : ""}</DrawerTitle>
           </DrawerHeader>
           {openDevice && (
             <div className="px-4 pb-2">
               <LightControlPanel
                 key={openDevice.id}
                 icon={openDevice.icon}
-                name={openDevice.name}
+                name={t(openDevice.nameKey)}
                 isOn={openDevice.isOn}
                 mode={openDevice.mode}
                 intensity={openDevice.intensity}
@@ -102,7 +104,7 @@ export default function FavoritesPage() {
               onClick={() => { setOpenId(null); }}
               className="h-11 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground"
             >
-              OK
+              {t("common.ok")}
             </button>
           </DrawerFooter>
         </DrawerContent>

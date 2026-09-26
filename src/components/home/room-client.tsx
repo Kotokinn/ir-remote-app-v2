@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Home as HomeIcon, Radio, Trash2, Users, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { roomCategories } from "@/lib/mock-data";
 import { SHARED_ROOM_ID, mayEdit } from "@/lib/sharing";
 import { getRoomIcon } from "@/lib/room-icons";
@@ -16,6 +17,7 @@ import { HubConnectivityIcon, HubTemperature, RoomTemperatureChip } from "@/comp
 
 export function RoomClient({ roomId }: { roomId: string }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const hydrated = useRoomsStore((s) => s.hydrated);
   const userRoom = useRoomsStore((s) => s.rooms.find((r) => r.id === roomId));
   const devices = useDevicesStore((s) => s.devices);
@@ -27,23 +29,23 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
   const room =
     roomId === "all"
-      ? { id: "all", name: "All Devices", icon: HomeIcon, color: "text-primary" }
+      ? { id: "all", name: t("home.allDevices"), icon: HomeIcon, color: "text-primary" }
       : roomId === SHARED_ROOM_ID
-        ? { id: SHARED_ROOM_ID, name: "Shared with me", icon: Users, color: "text-primary" }
+        ? { id: SHARED_ROOM_ID, name: t("home.sharedWithMe"), icon: Users, color: "text-primary" }
         : userRoom
         ? { id: userRoom.id, name: userRoom.name, icon: getRoomIcon(userRoom.iconKey), color: userRoom.color }
         : undefined;
 
   if (!hydrated) {
-    return <div className="px-4 pt-16 text-center text-sm text-muted-foreground">Loading…</div>;
+    return <div className="px-4 pt-16 text-center text-sm text-muted-foreground">{t("common.loading")}</div>;
   }
 
   if (!room) {
     return (
       <div className="flex flex-col items-center gap-3 px-4 pt-16 text-center">
-        <p className="text-sm text-muted-foreground">Room not found.</p>
+        <p className="text-sm text-muted-foreground">{t("room.notFound")}</p>
         <Link href="/home" className="text-sm font-medium text-primary">
-          Back to My Home
+          {t("room.backHome")}
         </Link>
       </div>
     );
@@ -62,9 +64,9 @@ export function RoomClient({ roomId }: { roomId: string }) {
         type="button"
         onClick={() => { router.back(); }}
         className="flex size-8 items-center justify-center rounded-full text-foreground/70 hover:bg-muted"
-        aria-label="Go back"
+        aria-label={t("common.back")}
       >
-        <ChevronLeft className="size-5" />
+        <ChevronLeft className="size-5 rtl:rotate-180" />
       </button>
 
       <div className="flex flex-col items-center gap-2">
@@ -85,9 +87,9 @@ export function RoomClient({ roomId }: { roomId: string }) {
               className="flex flex-col items-center gap-2 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
             >
               <CatIcon className={`size-7 ${cat.color}`} strokeWidth={1.6} />
-              <span className="text-sm font-medium">{cat.name}</span>
+              <span className="text-sm font-medium">{t(cat.nameKey)}</span>
               <span className="text-xs text-muted-foreground">
-                {cat.count} device{cat.count === 1 ? "" : "s"}
+                {t("home.deviceCount", { count: cat.count })}
               </span>
             </Link>
           );
@@ -96,7 +98,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
       {roomHubs.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Hubs & Modules</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">{t("room.hubsModules")}</h2>
           <div className="flex flex-col gap-2">
             {roomHubs.map((hub) => (
               <div
@@ -112,7 +114,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
                       setSheetHub(hub);
                     }
                   }}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1 text-start"
                 >
                   {hub.productType === "hub-ir" ? (
                     <Radio className="size-5 shrink-0 text-primary" />
@@ -122,7 +124,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">{hub.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {hub.productType === "hub-ir" ? "IR Hub · tap to add a function" : "8-relay module"}
+                      {hub.productType === "hub-ir" ? t("room.irHubHint") : t("room.relayModule")}
                     </span>
                   </div>
                 </button>
@@ -134,7 +136,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
                     onClick={() => {
                       setDeleteTarget(hub);
                     }}
-                    aria-label={`Remove ${hub.name}`}
+                    aria-label={t("room.removeAria", { name: hub.name })}
                     className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="size-4" />
@@ -160,10 +162,10 @@ export function RoomClient({ roomId }: { roomId: string }) {
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(undefined);
         }}
-        title={`Remove ${deleteTarget?.name ?? "this device"}?`}
+        title={t("room.removeTitle", { name: deleteTarget?.name ?? t("room.thisDevice") })}
         description={
           deleteTarget
-            ? `This also removes ${devices.filter((d) => d.hubId === deleteTarget.id).length} linked device(s). This can't be undone.`
+            ? t("room.removeDescription", { count: devices.filter((d) => d.hubId === deleteTarget.id).length })
             : undefined
         }
         onConfirm={() => {

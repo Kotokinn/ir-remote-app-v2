@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, Bluetooth, Check, Loader2, Radio, Wifi, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
+import type { TKey } from "@/lib/i18n";
+import { errorMessage as describeApiError } from "@/lib/i18n/errors";
 import { ApiError } from "@/lib/api/auth";
 import { startClaim } from "@/lib/api/mqtt";
 import {
@@ -17,10 +20,10 @@ import {
 
 type Step = "scanning" | "pick" | "connecting" | "wifi" | "provisioning" | "claiming" | "name" | "error";
 
-const PRODUCT_LABEL: Record<PhysicalProductType, string> = {
-  "hub-ir": "IR Hub",
-  relay8: "Relay Module",
-};
+const PRODUCT_LABEL = {
+  "hub-ir": "pairing.product.hub-ir",
+  relay8: "pairing.product.relay8",
+} as const satisfies Record<PhysicalProductType, TKey>;
 
 const SCAN_TIMEOUT_MS = 6000;
 
@@ -33,6 +36,7 @@ export function BleProvisioning({
   roomId: string;
   onComplete: (physicalDevice: PhysicalDevice) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const addPhysicalDevice = useHubsStore((s) => s.addPhysicalDevice);
   const [step, setStep] = useState<Step>("scanning");
   const [found, setFound] = useState<ScannedHub[]>([]);
@@ -48,8 +52,8 @@ export function BleProvisioning({
   );
   const defaultName =
     existingOfSameProduct > 0
-      ? `${PRODUCT_LABEL[product]} ${existingOfSameProduct + 1}`
-      : PRODUCT_LABEL[product];
+      ? `${t(PRODUCT_LABEL[product])} ${existingOfSameProduct + 1}`
+      : t(PRODUCT_LABEL[product]);
   const [name, setName] = useState(defaultName);
   const [errorMessage, setErrorMessage] = useState("");
   const [wifiError, setWifiError] = useState("");
@@ -69,7 +73,7 @@ export function BleProvisioning({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setErrorMessage(describeBleError(error, "Bluetooth scan failed"));
+        setErrorMessage(describeBleError(error, t("pairing.scanFailed")));
         setStep("error");
       });
     return () => {
@@ -87,7 +91,7 @@ export function BleProvisioning({
         setStep("wifi");
       })
       .catch((error: unknown) => {
-        setErrorMessage(describeBleError(error, "Failed to connect over Bluetooth"));
+        setErrorMessage(describeBleError(error, t("pairing.connectFailed")));
         setStep("error");
       });
   }
@@ -107,7 +111,7 @@ export function BleProvisioning({
         // Rejected (wrong SSID/password): the device saved nothing, did not reboot, and the BLE
         // link is still open — let the user retype instead of rescanning from scratch.
         keepConnected = true;
-        setWifiError(result.ack.message || "The device couldn't connect to that Wi-Fi network.");
+        setWifiError(result.ack.message || t("pairing.wifiRejected"));
         setStep("wifi");
         return;
       }
@@ -120,11 +124,9 @@ export function BleProvisioning({
       setStep("name");
     } catch (error) {
       if (error instanceof ApiError && error.status === 408) {
-        setErrorMessage(
-          "The device didn't come online after restarting. Check that this Wi-Fi network can reach the server, then try again."
-        );
+        setErrorMessage(t("pairing.offlineAfterRestart"));
       } else {
-        setErrorMessage(describeBleError(error, "Provisioning failed"));
+        setErrorMessage(describeBleError(error, t("pairing.provisionFailed")));
       }
       setStep("error");
     } finally {
@@ -147,7 +149,7 @@ export function BleProvisioning({
       });
       onComplete(created);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Couldn't save the device. Try again.");
+      setSaveError(describeApiError(error, t("pairing.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -157,9 +159,9 @@ export function BleProvisioning({
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Bluetooth className="size-10 animate-pulse text-primary" />
-        <p className="text-sm font-medium">Scanning for nearby devices…</p>
+        <p className="text-sm font-medium">{t("pairing.scanning")}</p>
         <p className="text-xs text-muted-foreground">
-          Make sure your {PRODUCT_LABEL[product].toLowerCase()} is powered on and in pairing mode.
+          {t("pairing.scanningHint", { product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(i18n.language) })}
         </p>
       </div>
     );
@@ -168,9 +170,9 @@ export function BleProvisioning({
   if (step === "pick") {
     return (
       <div className="flex flex-col gap-3">
-        <p className="px-1 text-sm text-muted-foreground">Select your device</p>
+        <p className="px-1 text-sm text-muted-foreground">{t("pairing.select")}</p>
         {found.length === 0 && (
-          <p className="px-1 text-sm text-muted-foreground">No devices found nearby.</p>
+          <p className="px-1 text-sm text-muted-foreground">{t("pairing.noneFound")}</p>
         )}
         {found.map((device) => (
           <button
@@ -179,12 +181,12 @@ export function BleProvisioning({
             onClick={() => {
               pick(device);
             }}
-            className="flex items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-sm ring-1 ring-border"
+            className="flex items-center gap-3 rounded-2xl bg-card p-4 text-start shadow-sm ring-1 ring-border"
           >
             <Icon className="size-5 text-primary" />
             <div className="flex flex-1 flex-col">
               <span className="text-sm font-medium">{device.name}</span>
-              <span className="text-xs text-muted-foreground">Signal {device.rssi} dBm</span>
+              <span className="text-xs text-muted-foreground">{t("pairing.signal", { rssi: device.rssi })}</span>
             </div>
           </button>
         ))}
@@ -195,7 +197,7 @@ export function BleProvisioning({
           }}
           className="mt-2 text-center text-sm font-medium text-primary"
         >
-          Scan again
+          {t("pairing.scanAgain")}
         </button>
       </div>
     );
@@ -205,7 +207,7 @@ export function BleProvisioning({
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
-        <p className="text-sm font-medium">Connecting to {picked?.name}…</p>
+        <p className="text-sm font-medium">{t("pairing.connecting", { name: picked?.name ?? "" })}</p>
       </div>
     );
   }
@@ -221,7 +223,7 @@ export function BleProvisioning({
       >
         <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
           <Wifi className="size-4" />
-          Send your Wi-Fi details over Bluetooth
+          {t("pairing.sendWifi")}
         </div>
         {wifiError && (
           <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-3.5 py-3 text-sm text-destructive">
@@ -230,7 +232,7 @@ export function BleProvisioning({
           </div>
         )}
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Network name</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("pairing.networkName")}</span>
           <input
             value={ssid}
             onChange={(e) => { setSsid(e.target.value); }}
@@ -239,7 +241,7 @@ export function BleProvisioning({
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Password</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("pairing.password")}</span>
           <input
             type="password"
             value={password}
@@ -252,7 +254,7 @@ export function BleProvisioning({
           type="submit"
           className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
         >
-          Connect
+          {t("pairing.connect")}
         </button>
       </form>
     );
@@ -263,12 +265,12 @@ export function BleProvisioning({
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
         <p className="text-sm font-medium">
-          {step === "provisioning" ? "Checking your Wi-Fi…" : "Device is connecting — claiming it…"}
+          {step === "provisioning" ? t("pairing.checkingWifi") : t("pairing.claiming")}
         </p>
         <p className="text-xs text-muted-foreground">
           {step === "provisioning"
-            ? "The device is trying to join your Wi-Fi network. This can take up to 20 seconds."
-            : "This can take up to 20 seconds while the device joins Wi-Fi and MQTT."}
+            ? t("pairing.checkingWifiHint")
+            : t("pairing.claimingHint")}
         </p>
       </div>
     );
@@ -280,7 +282,7 @@ export function BleProvisioning({
         <span className="flex size-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
           <AlertCircle className="size-6" />
         </span>
-        <p className="text-sm font-medium">Pairing failed</p>
+        <p className="text-sm font-medium">{t("pairing.failed")}</p>
         <p className="text-xs text-muted-foreground">{errorMessage}</p>
         <button
           type="button"
@@ -291,7 +293,7 @@ export function BleProvisioning({
           }}
           className="mt-2 h-11 w-full rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
         >
-          Try again
+          {t("common.tryAgain")}
         </button>
       </div>
     );
@@ -303,7 +305,7 @@ export function BleProvisioning({
         <span className="flex size-12 items-center justify-center rounded-full bg-accent text-primary">
           <Check className="size-6" />
         </span>
-        <p className="text-sm font-medium">Connected! Give it a name</p>
+        <p className="text-sm font-medium">{t("pairing.connectedName")}</p>
       </div>
       <input
         value={name}
@@ -319,7 +321,7 @@ export function BleProvisioning({
         disabled={saving}
         className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
       >
-        {saving ? "Saving…" : "Continue"}
+        {saving ? t("addDevice.saving") : t("common.continue")}
       </button>
     </div>
   );

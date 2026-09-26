@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { Check, Plus } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import type { Device } from "@/lib/mock-data";
 import {
   REMOTE_BUTTON_PRESETS,
   getRemoteButtonIcon,
+  remoteButtonLabel,
   type RemoteButton,
   type RemoteButtonPreset,
 } from "@/lib/remote-buttons";
@@ -27,6 +29,7 @@ export function RemoteSetup({
   hubId: string;
   onDone: (device: Device) => void;
 }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>("naming");
   const [name, setName] = useState("");
   const [buttons, setButtons] = useState<RemoteButton[]>([]);
@@ -49,7 +52,7 @@ export function RemoteSetup({
   function finish() {
     onDone({
       id: newDeviceId(),
-      name: name.trim() || "Remote",
+      name: name.trim() || t("remoteSetup.defaultName"),
       roomId,
       categoryId: "ir",
       isOn: false,
@@ -63,12 +66,12 @@ export function RemoteSetup({
     return (
       <div className="flex flex-col gap-4">
         <p className="px-1 text-sm text-muted-foreground">
-          What are you setting up? (e.g. Living room TV)
+          {t("remoteSetup.whatSettingUp")}
         </p>
         <input
           value={name}
           onChange={(e) => { setName(e.target.value); }}
-          placeholder="Device name"
+          placeholder={t("remoteSetup.namePlaceholder")}
           autoFocus
           className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
         />
@@ -78,7 +81,7 @@ export function RemoteSetup({
           onClick={() => { setStep("buttons"); }}
           className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-50"
         >
-          Continue
+          {t("common.continue")}
         </button>
       </div>
     );
@@ -94,9 +97,9 @@ export function RemoteSetup({
           })()}
         </span>
         <p className="text-sm font-medium">
-          Point the original remote at the hub and press &quot;{pending.label}&quot;
+          {t("remoteSetup.pointRemote", { label: remoteButtonLabel(pending.iconKey, pending.label) })}
         </p>
-        <p className="text-xs text-muted-foreground">Learning…</p>
+        <p className="text-xs text-muted-foreground">{t("remoteSetup.learning")}</p>
       </div>
     );
   }
@@ -104,7 +107,11 @@ export function RemoteSetup({
   return (
     <div className="flex flex-col gap-4">
       <p className="px-1 text-sm text-muted-foreground">
-        Add at least one button for <span className="font-medium text-foreground">{name}</span>
+        <Trans
+          i18nKey="remoteSetup.addAtLeast"
+          values={{ name }}
+          components={{ b: <span className="font-medium text-foreground" /> }}
+        />
       </p>
 
       <div className="grid grid-cols-4 gap-3">
@@ -116,7 +123,7 @@ export function RemoteSetup({
               className="flex flex-col items-center gap-1.5 rounded-2xl bg-card px-2 py-3 text-[11px] font-medium shadow-sm ring-1 ring-border"
             >
               <Icon className="size-5" />
-              <span className="w-full truncate text-center">{button.label}</span>
+              <span className="w-full truncate text-center">{remoteButtonLabel(button.iconKey, button.label)}</span>
             </div>
           );
         })}
@@ -126,7 +133,7 @@ export function RemoteSetup({
           className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-3 text-[11px] font-medium text-muted-foreground"
         >
           <Plus className="size-5" />
-          Add
+          {t("common.add")}
         </button>
       </div>
 
@@ -137,7 +144,7 @@ export function RemoteSetup({
         className="mt-2 flex h-12 items-center justify-center gap-2 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-50"
       >
         <Check className="size-4" />
-        Finish ({buttons.length} button{buttons.length === 1 ? "" : "s"})
+        {t("remoteSetup.finish", { count: buttons.length })}
       </button>
 
       <RemoteButtonPicker

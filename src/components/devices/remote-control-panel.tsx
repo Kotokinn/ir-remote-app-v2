@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
-import { getRemoteButtonIcon, REMOTE_BUTTON_PRESETS, type RemoteButton } from "@/lib/remote-buttons";
+import { useTranslation } from "react-i18next";
+import { getRemoteButtonIcon, remoteButtonLabel, REMOTE_BUTTON_PRESETS, type RemoteButton } from "@/lib/remote-buttons";
 import { RemoteButtonPicker } from "@/components/devices/remote-button-picker";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export function RemoteControlPanel({
   hubName?: string;
   onButtonsChange?: (buttons: RemoteButton[]) => void;
 }) {
+  const { t } = useTranslation();
   const [buttons, setButtons] = useState(initialButtons);
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -44,7 +46,7 @@ export function RemoteControlPanel({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-base font-semibold">{name}</span>
-          {hubName && <span className="text-xs text-muted-foreground">via {hubName}</span>}
+          {hubName && <span className="text-xs text-muted-foreground">{t("device.via", { hub: hubName })}</span>}
         </div>
         <button
           type="button"
@@ -57,7 +59,7 @@ export function RemoteControlPanel({
           )}
         >
           <Pencil className="size-3.5" />
-          {editing ? "Done" : "Edit layout"}
+          {editing ? t("common.done") : t("remotePanel.editLayout")}
         </button>
       </div>
 
@@ -77,7 +79,7 @@ export function RemoteControlPanel({
                 )}
               >
                 <Icon className="size-5" />
-                <span className="w-full truncate text-center">{button.label}</span>
+                <span className="w-full truncate text-center">{remoteButtonLabel(button.iconKey, button.label)}</span>
               </button>
               {editing && (
                 <button
@@ -85,8 +87,8 @@ export function RemoteControlPanel({
                   onClick={() => {
                     handleRemove(button.id);
                   }}
-                  aria-label={`Remove ${button.label}`}
-                  className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-white"
+                  aria-label={t("room.removeAria", { name: remoteButtonLabel(button.iconKey, button.label) })}
+                  className="absolute -top-1.5 -end-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-white"
                 >
                   <X className="size-3" />
                 </button>
@@ -104,7 +106,7 @@ export function RemoteControlPanel({
             className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-3 text-[11px] font-medium text-muted-foreground"
           >
             <Plus className="size-5" />
-            Add
+            {t("common.add")}
           </button>
         )}
       </div>

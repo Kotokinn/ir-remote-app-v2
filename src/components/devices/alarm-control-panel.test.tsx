@@ -91,7 +91,7 @@ describe("AlarmControlPanel: sync debounce", () => {
   it("toggling ON/OFF is debounced the same way", () => {
     const { onChange } = setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "ON" }));
+    fireEvent.click(screen.getByRole("button", { name: "On" }));
     expect(onChange).not.toHaveBeenCalled();
 
     act(() => {

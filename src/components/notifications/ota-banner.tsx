@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useHubsStore } from "@/lib/store/hubs-store";
 import { useOtaStore } from "@/lib/store/ota-store";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
@@ -16,6 +17,7 @@ import { sendDeviceCommand } from "@/lib/device/device-commands";
  * — never hand-entered — so it can't drift from what the device actually offered.
  */
 export function OtaBanners() {
+  const { t } = useTranslation();
   const physicalDevices = useHubsStore((s) => s.physicalDevices);
   const events = useOtaStore((s) => s.events);
   const dismiss = useOtaStore((s) => s.dismiss);
@@ -62,7 +64,7 @@ export function OtaBanners() {
               {event.type === "firmwareAvailable" && (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Firmware {event.newVersion} is available (current {event.currentVersion}).
+                    {t("ota.available", { newVersion: event.newVersion, currentVersion: event.currentVersion })}
                   </p>
                   <button
                     type="button"
@@ -72,18 +74,18 @@ export function OtaBanners() {
                     }}
                     className="mt-1 w-fit rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                   >
-                    {sending ? "Starting…" : "Update now"}
+                    {sending ? t("ota.starting") : t("ota.updateNow")}
                   </button>
                 </>
               )}
 
               {event.type === "otaStarted" && (
-                <p className="text-xs text-muted-foreground">Updating to {event.newVersion}…</p>
+                <p className="text-xs text-muted-foreground">{t("ota.updating", { version: event.newVersion })}</p>
               )}
 
               {event.type === "otaSuccess" && (
                 <>
-                  <p className="text-xs text-muted-foreground">Updated to {event.newVersion}.</p>
+                  <p className="text-xs text-muted-foreground">{t("ota.updated", { version: event.newVersion })}</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -91,14 +93,14 @@ export function OtaBanners() {
                     }}
                     className="mt-1 w-fit text-xs font-medium text-primary"
                   >
-                    Dismiss
+                    {t("ota.dismiss")}
                   </button>
                 </>
               )}
 
               {event.type === "otaFailed" && (
                 <>
-                  <p className="text-xs text-destructive">Update to {event.newVersion} failed.</p>
+                  <p className="text-xs text-destructive">{t("ota.failed", { version: event.newVersion })}</p>
                   <button
                     type="button"
                     disabled={sending}
@@ -107,7 +109,7 @@ export function OtaBanners() {
                     }}
                     className="mt-1 w-fit rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                   >
-                    {sending ? "Retrying…" : "Retry"}
+                    {sending ? t("ota.retrying") : t("common.retry")}
                   </button>
                 </>
               )}

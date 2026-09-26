@@ -14,7 +14,8 @@
       "allow": [
         { "url": "https://accounts.google.com/*" },
         { "url": "https://oauth2.googleapis.com/*" },
-        { "url": "http://localhost:18080/*" }
+        { "url": "http://localhost:18080/*" },
+        { "url": "https://dev.vietdanjsc.com/*" }
       ]
     }
   ]

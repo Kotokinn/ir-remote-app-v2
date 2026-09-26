@@ -5,6 +5,7 @@ import { PullToRefresh } from "@/components/app-shell/pull-to-refresh";
 import { DataHydrator } from "@/components/app-shell/data-hydrator";
 import { AuthGuard } from "@/components/app-shell/auth-guard";
 import { JoinLinkListener } from "@/components/app-shell/join-link-listener";
+import { SyncStatus } from "@/components/app-shell/sync-status";
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
       <DataHydrator />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <SyncStatus />
         <PullToRefresh>{children}</PullToRefresh>
         <BottomNav />
       </div>

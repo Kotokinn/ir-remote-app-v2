@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlarmClock } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { weekdayNames } from "@/lib/i18n/format";
 import { cn } from "@/lib/utils";
-
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 // The native time input fires onChange repeatedly while scrubbing/typing, and each report is a real
 // MQTT publish (setSchedule) — without this, moving the clock spams the hub. Debounce to one send
@@ -42,6 +42,8 @@ export function AlarmControlPanel({
   hubName?: string;
   onChange?: (state: AlarmState) => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const weekdays = weekdayNames(i18n.language, "narrow");
   const [isOn, setIsOn] = useState(initialOn);
   const [time, setTime] = useState(initialTime);
   const [days, setDays] = useState<number[]>(
@@ -97,7 +99,7 @@ export function AlarmControlPanel({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-base font-semibold">{name}</span>
-          {hubName && <span className="text-xs text-muted-foreground">via {hubName}</span>}
+          {hubName && <span className="text-xs text-muted-foreground">{t("device.via", { hub: hubName })}</span>}
         </div>
         <button
           type="button"
@@ -105,11 +107,11 @@ export function AlarmControlPanel({
             setIsOn((v) => !v);
           }}
           className={cn(
-            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             isOn ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {isOn ? "ON" : "OFF"}
+          {isOn ? t("common.on") : t("common.off")}
         </button>
       </div>
 
@@ -133,9 +135,9 @@ export function AlarmControlPanel({
       </div>
 
       <div className="flex flex-col items-center gap-3">
-        <span className="text-sm text-muted-foreground">Repeat</span>
+        <span className="text-sm text-muted-foreground">{t("alarmSetup.repeat")}</span>
         <div className="flex gap-2">
-          {WEEKDAYS.map((day, i) => (
+          {weekdays.map((day, i) => (
             <button
               key={`${day}-${i}`}
               type="button"
@@ -155,7 +157,7 @@ export function AlarmControlPanel({
         </div>
         {days.length === 0 && (
           <p className="text-center text-[11px] text-muted-foreground">
-            No repeat days selected — this alarm won&apos;t ring.
+            {t("alarmSetup.noRepeat")}
           </p>
         )}
       </div>

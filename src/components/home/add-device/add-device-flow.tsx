@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TKey } from "@/lib/i18n";
+import { useRunsInApp } from "@/lib/platform";
+import { errorMessage } from "@/lib/i18n/errors";
 import { SHADE_COLORS, type Device } from "@/lib/mock-data";
 import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
@@ -26,16 +30,16 @@ type Step =
   | { name: "alarm"; hubId: string; hubName: string }
   | { name: "relay"; physicalId: string };
 
-const TITLES: Record<Step["name"], string> = {
-  product: "Add device",
-  provisioning: "Connect device",
-  "hub-function": "Add a function",
-  ac: "Add air conditioner",
-  remote: "Add learning remote",
-  rgb: "Add RGB light",
-  temp: "Add temperature control",
-  alarm: "Add alarm",
-  relay: "Set up channels",
+const TITLES: Record<Step["name"], TKey> = {
+  product: "addDevice.steps.product",
+  provisioning: "addDevice.steps.provisioning",
+  "hub-function": "addDevice.steps.hubFunction",
+  ac: "addDevice.steps.ac",
+  remote: "addDevice.steps.remote",
+  rgb: "addDevice.steps.rgb",
+  temp: "addDevice.steps.temp",
+  alarm: "addDevice.steps.alarm",
+  relay: "addDevice.steps.relay",
 };
 
 export function AddDeviceFlow({
@@ -46,6 +50,8 @@ export function AddDeviceFlow({
   initialHub?: PhysicalDevice;
 }) {
   const router = useRouter();
+  const { t } = useTranslation();
+  const inApp = useRunsInApp();
   const addDevice = useDevicesStore((s) => s.addDevice);
   const addDevices = useDevicesStore((s) => s.addDevices);
 
@@ -72,7 +78,7 @@ export function AddDeviceFlow({
       await save();
       finishToRoom();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Couldn't save. Check your connection and try again.");
+      setSaveError(errorMessage(error, t("addDevice.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -85,18 +91,18 @@ export function AddDeviceFlow({
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{TITLES[step.name]}</h1>
+        <h1 className="text-lg font-semibold">{t(TITLES[step.name])}</h1>
         <button
           type="button"
           onClick={finishToRoom}
           className="flex size-8 items-center justify-center rounded-full text-foreground/70 hover:bg-muted"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <X className="size-5" />
         </button>
       </div>
 
-      {saving && <p className="text-center text-xs text-muted-foreground">Saving…</p>}
+      {saving && <p className="text-center text-xs text-muted-foreground">{t("addDevice.saving")}</p>}
       {saveError && (
         <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{saveError}</p>
       )}
@@ -109,7 +115,23 @@ export function AddDeviceFlow({
         />
       )}
 
-      {step.name === "provisioning" && (
+      {step.name === "provisioning" && !inApp && (
+        <div className="flex flex-col items-center gap-3 pt-10 text-center">
+          <p className="text-sm font-medium">{t("addDevice.webPairingTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("addDevice.webPairingBody")}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setStep({ name: "product" });
+            }}
+            className="mt-2 h-11 w-full rounded-xl bg-muted text-sm font-semibold text-foreground/70"
+          >
+            {t("common.back")}
+          </button>
+        </div>
+      )}
+
+      {step.name === "provisioning" && inApp && (
         <BleProvisioning
           product={step.product}
           roomId={roomId}
@@ -142,7 +164,7 @@ export function AddDeviceFlow({
 
       {step.name === "rgb" && (
         <NativeFunctionSetup
-          placeholder="e.g. Bedroom RGB strip"
+          placeholder={t("addDevice.rgbPlaceholder")}
           roomId={roomId}
           hubId={step.hubId}
           onDone={handleDone}
@@ -160,7 +182,7 @@ export function AddDeviceFlow({
 
       {step.name === "temp" && (
         <NativeFunctionSetup
-          placeholder="e.g. Living room heater"
+          placeholder={t("addDevice.tempPlaceholder")}
           roomId={roomId}
           hubId={step.hubId}
           onDone={handleDone}

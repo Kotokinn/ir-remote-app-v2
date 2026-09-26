@@ -2,8 +2,10 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { ApiError } from "@/lib/api/auth";
 import { hubsApi, toWirePatch, type AccessLevel, type HubResponse } from "@/lib/api/smart";
+import { pendingByKey, recentlySyncedKind } from "@/lib/sync/outbox-store";
+import { enqueueSync } from "@/lib/sync/queue";
+import { applyWirePatch, reconcile } from "@/lib/sync/reconcile";
 
 export type PhysicalProductType = "hub-ir" | "relay8";
 
@@ -61,15 +63,15 @@ interface HubsState {
   fetchHubs: () => Promise<void>;
   /** Needs the server-assigned id, so — unlike update/remove — it can't be optimistic; rejects on failure. */
   addPhysicalDevice: (device: Omit<PhysicalDevice, "id" | "online">) => Promise<PhysicalDevice>;
-  /** Local change applies at once; the server save runs behind it and never rejects (failure is logged). */
+  /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
   removePhysicalDevice: (id: string) => Promise<void>;
-  /** Local change applies at once; the server save runs behind it and never rejects (failure is logged). */
+  /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
   updatePhysicalDevice: (id: string, patch: Partial<PhysicalDevice>) => Promise<void>;
 }
 
 export const useHubsStore = create<HubsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       physicalDevices: [],
       hydrated: false,
       fetchHubs: async () => {
@@ -77,16 +79,24 @@ export const useHubsStore = create<HubsState>()(
           const hubs = await hubsApi.list();
           set((state) => {
             const cached = new Map(state.physicalDevices.map((d) => [d.id, d]));
+            const server = hubs.map((hub) => {
+              const fresh = fromResponse(hub);
+              const previous = cached.get(fresh.id);
+              return {
+                ...fresh,
+                preferredTransport: previous?.preferredTransport,
+                serialPort: previous?.serialPort,
+              };
+            });
+            // Not a plain replace: changes still waiting in the sync queue must survive the fetch.
             return {
-              physicalDevices: hubs.map((hub) => {
-                const fresh = fromResponse(hub);
-                const previous = cached.get(fresh.id);
-                return {
-                  ...fresh,
-                  preferredTransport: previous?.preferredTransport,
-                  serialPort: previous?.serialPort,
-                };
-              }),
+              physicalDevices: reconcile(
+                server,
+                state.physicalDevices,
+                pendingByKey("hub"),
+                (key) => recentlySyncedKind("hub", key),
+                applyWirePatch
+              ),
             };
           });
         } catch (error) {
@@ -105,29 +115,31 @@ export const useHubsStore = create<HubsState>()(
         set((state) => ({ physicalDevices: [...state.physicalDevices, created] }));
         return created;
       },
-      removePhysicalDevice: async (id) => {
+      removePhysicalDevice: (id) => {
+        const hub = get().physicalDevices.find((d) => d.id === id);
         set((state) => ({ physicalDevices: state.physicalDevices.filter((d) => d.id !== id) }));
-        try {
-          await hubsApi.remove(Number(id));
-        } catch (error) {
-          // 404 = already gone (e.g. removed from another device): the outcome the user wanted.
-          if (error instanceof ApiError && error.status === 404) return;
-          console.error("[hubs] delete failed", error);
-        }
+        // The server deletes the hub's devices together with it.
+        enqueueSync({ entity: "hub", kind: "delete", key: id, label: hub?.name ?? "device" });
+        return Promise.resolve();
       },
-      updatePhysicalDevice: async (id, patch) => {
+      updatePhysicalDevice: (id, patch) => {
         set((state) => ({
           physicalDevices: state.physicalDevices.map((d) => (d.id === id ? { ...d, ...patch } : d)),
         }));
         const remote = Object.fromEntries(
           Object.entries(patch).filter(([key]) => !(LOCAL_ONLY_KEYS as readonly string[]).includes(key))
         );
-        if (Object.keys(remote).length === 0) return;
-        try {
-          await hubsApi.patch(Number(id), toWirePatch(remote));
-        } catch (error) {
-          console.error("[hubs] update failed", error);
+        if (Object.keys(remote).length > 0) {
+          const hub = get().physicalDevices.find((d) => d.id === id);
+          enqueueSync({
+            entity: "hub",
+            kind: "patch",
+            key: id,
+            label: hub?.name ?? "device",
+            payload: toWirePatch(remote),
+          });
         }
+        return Promise.resolve();
       },
     }),
     {

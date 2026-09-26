@@ -1,44 +1,46 @@
 "use client";
 
 import { AirVent, AlarmClock, Palette, Radio, Thermometer } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
+import type { TKey } from "@/lib/i18n";
 
 export type HubFunctionKind = "ac" | "remote" | "rgb" | "temp" | "alarm";
 
 const FUNCTIONS: Array<{
   id: HubFunctionKind;
   icon: typeof AirVent;
-  title: string;
-  description: string;
+  titleKey: TKey;
+  descriptionKey: TKey;
 }> = [
   {
     id: "ac",
     icon: AirVent,
-    title: "Air conditioner",
-    description: "Control an external AC via IR — pick brand and code, full control.",
+    titleKey: "addDevice.functions.ac.title",
+    descriptionKey: "addDevice.functions.ac.desc",
   },
   {
     id: "remote",
     icon: Radio,
-    title: "Learning remote",
-    description: "Any other device (TV, fan, soundbar…) — learn buttons from its original remote.",
+    titleKey: "addDevice.functions.remote.title",
+    descriptionKey: "addDevice.functions.remote.desc",
   },
   {
     id: "rgb",
     icon: Palette,
-    title: "RGB light",
-    description: "Native color light built into this hub — modes, brightness, color.",
+    titleKey: "addDevice.functions.rgb.title",
+    descriptionKey: "addDevice.functions.rgb.desc",
   },
   {
     id: "temp",
     icon: Thermometer,
-    title: "Temperature control",
-    description: "Native heating/cooling dial on this hub (not an external AC).",
+    titleKey: "addDevice.functions.temp.title",
+    descriptionKey: "addDevice.functions.temp.desc",
   },
   {
     id: "alarm",
     icon: AlarmClock,
-    title: "Alarm",
-    description: "Built-in alarm on this hub — set a time and repeat days.",
+    titleKey: "addDevice.functions.alarm.title",
+    descriptionKey: "addDevice.functions.alarm.desc",
   },
 ];
 
@@ -49,10 +51,15 @@ export function HubFunctionChoice({
   hubName: string;
   onSelect: (kind: HubFunctionKind) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-3">
       <p className="px-1 text-sm text-muted-foreground">
-        What should <span className="font-medium text-foreground">{hubName}</span> control?
+        <Trans
+          i18nKey="addDevice.controlPrompt"
+          values={{ name: hubName }}
+          components={{ b: <span className="font-medium text-foreground" /> }}
+        />
       </p>
 
       {FUNCTIONS.map((fn) => {
@@ -64,14 +71,14 @@ export function HubFunctionChoice({
             onClick={() => {
               onSelect(fn.id);
             }}
-            className="flex items-start gap-4 rounded-2xl bg-card p-4 text-left shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
+            className="flex items-start gap-4 rounded-2xl bg-card p-4 text-start shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
           >
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
               <Icon className="size-5" />
             </span>
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold">{fn.title}</span>
-              <span className="text-xs text-muted-foreground">{fn.description}</span>
+              <span className="text-sm font-semibold">{t(fn.titleKey)}</span>
+              <span className="text-xs text-muted-foreground">{t(fn.descriptionKey)}</span>
             </div>
           </button>
         );

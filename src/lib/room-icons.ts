@@ -9,16 +9,17 @@ import {
   Sofa,
   type LucideIcon,
 } from "lucide-react";
+import type { TKey } from "@/lib/i18n";
 
 export const ROOM_ICON_OPTIONS = [
-  { key: "bed", icon: Bed, label: "Bedroom" },
-  { key: "sofa", icon: Sofa, label: "Living room" },
-  { key: "bath", icon: Bath, label: "Bathroom" },
-  { key: "chef-hat", icon: ChefHat, label: "Kitchen" },
-  { key: "archive", icon: Archive, label: "Storage" },
-  { key: "book-open", icon: BookOpen, label: "Study" },
-  { key: "door-open", icon: DoorOpen, label: "Entrance" },
-  { key: "home", icon: Home, label: "Other" },
+  { key: "bed", icon: Bed, labelKey: "roomIcon.bed" },
+  { key: "sofa", icon: Sofa, labelKey: "roomIcon.sofa" },
+  { key: "bath", icon: Bath, labelKey: "roomIcon.bath" },
+  { key: "chef-hat", icon: ChefHat, labelKey: "roomIcon.chef-hat" },
+  { key: "archive", icon: Archive, labelKey: "roomIcon.archive" },
+  { key: "book-open", icon: BookOpen, labelKey: "roomIcon.book-open" },
+  { key: "door-open", icon: DoorOpen, labelKey: "roomIcon.door-open" },
+  { key: "home", icon: Home, labelKey: "roomIcon.home" },
 ] as const;
 
 export type RoomIconKey = (typeof ROOM_ICON_OPTIONS)[number]["key"];

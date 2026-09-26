@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { RemoteButton } from "@/lib/remote-buttons";
+import type { TKey } from "@/lib/i18n";
 
 export type CategoryId =
   | "lighting"
@@ -34,20 +35,20 @@ export type CategoryId =
 
 export interface Category {
   id: CategoryId;
-  name: string;
+  nameKey: TKey;
   icon: LucideIcon;
   color: string;
 }
 
 export const CATEGORIES: Record<CategoryId, Category> = {
-  lighting: { id: "lighting", name: "Lighting", icon: Lightbulb, color: "text-amber-500" },
-  hvac: { id: "hvac", name: "HVAC", icon: AirVent, color: "text-sky-500" },
-  ir: { id: "ir", name: "IR Control", icon: Radio, color: "text-rose-500" },
-  curtains: { id: "curtains", name: "Curtains", icon: Blinds, color: "text-emerald-600" },
-  sensors: { id: "sensors", name: "Sensors", icon: PersonStanding, color: "text-orange-500" },
-  security: { id: "security", name: "Security", icon: ShieldCheck, color: "text-blue-600" },
-  switches: { id: "switches", name: "Switches", icon: Power, color: "text-fuchsia-500" },
-  alarm: { id: "alarm", name: "Alarm", icon: AlarmClock, color: "text-red-500" },
+  lighting: { id: "lighting", nameKey: "category.lighting", icon: Lightbulb, color: "text-amber-500" },
+  hvac: { id: "hvac", nameKey: "category.hvac", icon: AirVent, color: "text-sky-500" },
+  ir: { id: "ir", nameKey: "category.ir", icon: Radio, color: "text-rose-500" },
+  curtains: { id: "curtains", nameKey: "category.curtains", icon: Blinds, color: "text-emerald-600" },
+  sensors: { id: "sensors", nameKey: "category.sensors", icon: PersonStanding, color: "text-orange-500" },
+  security: { id: "security", nameKey: "category.security", icon: ShieldCheck, color: "text-blue-600" },
+  switches: { id: "switches", nameKey: "category.switches", icon: Power, color: "text-fuchsia-500" },
+  alarm: { id: "alarm", nameKey: "category.alarm", icon: AlarmClock, color: "text-red-500" },
 };
 
 export type DeviceKind = "toggle" | "light" | "ac" | "remote" | "alarm" | "rgb";
@@ -152,7 +153,7 @@ export function getCategory(id: string): Category | undefined {
 
 export interface FavoriteDevice {
   id: string;
-  name: string;
+  nameKey: TKey;
   icon: LucideIcon;
   isOn: boolean;
   mode?: "morning" | "day" | "night";
@@ -162,14 +163,14 @@ export interface FavoriteDevice {
 }
 
 export const FAVORITES: FavoriteDevice[] = [
-  { id: "fav-dimmer", name: "Dimmer", icon: Sun, isOn: false, controllable: true, intensity: 30, mode: "day", colorIndex: 3 },
-  { id: "fav-tubelight", name: "Tubelight", icon: Lightbulb, isOn: true, controllable: true, intensity: 80, mode: "day", colorIndex: 5 },
-  { id: "fav-bedlamp", name: "Bed lamp", icon: Lamp, isOn: true, controllable: true, intensity: 68, mode: "day", colorIndex: 7 },
-  { id: "fav-thermostat", name: "Hall thermostat", icon: Thermometer, isOn: false, controllable: false },
-  { id: "fav-ac", name: "AC", icon: AirVent, isOn: false, controllable: false },
-  { id: "fav-lock", name: "Front door lock", icon: Lock, isOn: false, controllable: false },
-  { id: "fav-curtain", name: "Curtain", icon: Blinds, isOn: false, controllable: false },
-  { id: "fav-presence", name: "Presence mode", icon: PersonStanding, isOn: true, controllable: false },
+  { id: "fav-dimmer", nameKey: "favorites.items.fav-dimmer", icon: Sun, isOn: false, controllable: true, intensity: 30, mode: "day", colorIndex: 3 },
+  { id: "fav-tubelight", nameKey: "favorites.items.fav-tubelight", icon: Lightbulb, isOn: true, controllable: true, intensity: 80, mode: "day", colorIndex: 5 },
+  { id: "fav-bedlamp", nameKey: "favorites.items.fav-bedlamp", icon: Lamp, isOn: true, controllable: true, intensity: 68, mode: "day", colorIndex: 7 },
+  { id: "fav-thermostat", nameKey: "favorites.items.fav-thermostat", icon: Thermometer, isOn: false, controllable: false },
+  { id: "fav-ac", nameKey: "favorites.items.fav-ac", icon: AirVent, isOn: false, controllable: false },
+  { id: "fav-lock", nameKey: "favorites.items.fav-lock", icon: Lock, isOn: false, controllable: false },
+  { id: "fav-curtain", nameKey: "favorites.items.fav-curtain", icon: Blinds, isOn: false, controllable: false },
+  { id: "fav-presence", nameKey: "favorites.items.fav-presence", icon: PersonStanding, isOn: true, controllable: false },
 ];
 
 export interface SceneAction {
@@ -211,16 +212,16 @@ export interface Schedule {
 
 export interface SettingsItem {
   id: string;
-  label: string;
+  labelKey: TKey;
   icon: LucideIcon;
 }
 
 export const SETTINGS_ITEMS: SettingsItem[] = [
-  { id: "new-brands", label: "New brands", icon: Bell },
-  { id: "profile", label: "Profile", icon: UserRound },
-  { id: "household", label: "Household", icon: Users },
-  { id: "account", label: "Account", icon: ShieldQuestion },
-  { id: "sync-options", label: "Sync options", icon: RefreshCw },
-  { id: "support", label: "Support", icon: LifeBuoy },
-  { id: "tips", label: "Tips", icon: TipIcon },
+  { id: "new-brands", labelKey: "settings.items.new-brands", icon: Bell },
+  { id: "profile", labelKey: "settings.items.profile", icon: UserRound },
+  { id: "household", labelKey: "settings.items.household", icon: Users },
+  { id: "account", labelKey: "settings.items.account", icon: ShieldQuestion },
+  { id: "sync-options", labelKey: "settings.items.sync-options", icon: RefreshCw },
+  { id: "support", labelKey: "settings.items.support", icon: LifeBuoy },
+  { id: "tips", labelKey: "settings.items.tips", icon: TipIcon },
 ];

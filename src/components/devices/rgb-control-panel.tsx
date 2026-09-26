@@ -2,17 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Circle, Lightbulb, Rainbow, RotateCw, Waves, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TKey } from "@/lib/i18n";
 import { Slider } from "@/components/ui/slider";
 import { ColorWheel } from "@/components/devices/color-wheel";
 import { SHADE_COLORS, type RgbEffect } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
-const EFFECTS: Array<{ id: RgbEffect; label: string; icon: typeof Circle }> = [
-  { id: "solid", label: "Solid", icon: Circle },
-  { id: "blink", label: "Blink", icon: Zap },
-  { id: "breathe", label: "Breathe", icon: Waves },
-  { id: "flow", label: "Flow", icon: Rainbow },
-  { id: "chase", label: "Chase", icon: RotateCw },
+const EFFECTS: Array<{ id: RgbEffect; labelKey: TKey; icon: typeof Circle }> = [
+  { id: "solid", labelKey: "rgb.effect.solid", icon: Circle },
+  { id: "blink", labelKey: "rgb.effect.blink", icon: Zap },
+  { id: "breathe", labelKey: "rgb.effect.breathe", icon: Waves },
+  { id: "flow", labelKey: "rgb.effect.flow", icon: Rainbow },
+  { id: "chase", labelKey: "rgb.effect.chase", icon: RotateCw },
 ];
 
 const EFFECT_ANIMATION: Record<RgbEffect, string | undefined> = {
@@ -57,6 +59,7 @@ export function RgbControlPanel({
   hubName?: string;
   onChange?: (state: RgbState) => void;
 }) {
+  const { t } = useTranslation();
   const [isOn, setIsOn] = useState(initialOn);
   const [intensity, setIntensity] = useState(initialIntensity);
   const [color, setColor] = useState(initialColor);
@@ -135,7 +138,7 @@ export function RgbControlPanel({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-base font-semibold">{name}</span>
-          {hubName && <span className="text-xs text-muted-foreground">via {hubName}</span>}
+          {hubName && <span className="text-xs text-muted-foreground">{t("device.via", { hub: hubName })}</span>}
         </div>
         <button
           type="button"
@@ -143,11 +146,11 @@ export function RgbControlPanel({
             setIsOn((v) => !v);
           }}
           className={cn(
-            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold transition-colors",
+            "h-7 min-w-14 rounded-full px-3 text-xs font-semibold uppercase transition-colors",
             isOn ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}
         >
-          {isOn ? "ON" : "OFF"}
+          {isOn ? t("common.on") : t("common.off")}
         </button>
       </div>
 
@@ -165,7 +168,7 @@ export function RgbControlPanel({
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Effect</span>
+        <span className="text-sm text-muted-foreground">{t("rgb.effectLabel")}</span>
         <div className="flex items-center gap-1">
           {EFFECTS.map((fx) => {
             const Icon = fx.icon;
@@ -183,7 +186,7 @@ export function RgbControlPanel({
                 )}
               >
                 <Icon className="size-4" />
-                {fx.label}
+                {t(fx.labelKey)}
               </button>
             );
           })}
@@ -192,7 +195,7 @@ export function RgbControlPanel({
 
       {effect !== "solid" && (
         <div className="flex flex-col gap-3">
-          <span className="text-sm text-muted-foreground">Speed</span>
+          <span className="text-sm text-muted-foreground">{t("rgb.speed")}</span>
           <Slider
             value={[speed]}
             onValueChange={(value: number | readonly number[]) => {
@@ -207,7 +210,7 @@ export function RgbControlPanel({
       )}
 
       <div className="flex flex-col gap-3">
-        <span className="text-sm text-muted-foreground">Brightness</span>
+        <span className="text-sm text-muted-foreground">{t("rgb.brightness")}</span>
         <Slider
           value={[intensity]}
           onValueChange={(value: number | readonly number[]) => {
@@ -221,7 +224,7 @@ export function RgbControlPanel({
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Color</span>
+          <span className="text-sm text-muted-foreground">{t("rgb.color")}</span>
           <span className="text-xs tabular-nums text-muted-foreground">{color.toUpperCase()}</span>
         </div>
         <div className="flex justify-center py-1">
@@ -241,7 +244,7 @@ export function RgbControlPanel({
               onClick={() => {
                 setColor(c);
               }}
-              aria-label={`Shade ${i + 1}`}
+              aria-label={t("device.shade", { n: i + 1 })}
               className={cn(
                 "size-6 rounded-full ring-offset-2 ring-offset-background transition-shadow",
                 color === c && "ring-2 ring-foreground"

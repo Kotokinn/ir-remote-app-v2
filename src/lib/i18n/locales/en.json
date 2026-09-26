@@ -1,0 +1,633 @@
+{
+  "common": {
+    "back": "Go back",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "add": "Add",
+    "done": "Done",
+    "close": "Close",
+    "next": "Next",
+    "loading": "Loading…",
+    "on": "On",
+    "off": "Off",
+    "remove": "Remove",
+    "cannotUndo": "This can't be undone.",
+    "continue": "Continue",
+    "name": "Name",
+    "tryAgain": "Try again",
+    "ok": "OK"
+  },
+  "app": {
+    "name": "Smart Home",
+    "tagline": "Control every room, one tap away"
+  },
+  "nav": {
+    "home": "My Home",
+    "automation": "Automation",
+    "favorites": "Favorites",
+    "notifications": "Notifications",
+    "settings": "Settings"
+  },
+  "notifications": {
+    "unreadAria_one": "{{count}} unread notification",
+    "unreadAria_other": "{{count}} unread notifications",
+    "refreshFailed": "Couldn't refresh notifications. Check your connection; showing the last known list.",
+    "deleteFailed": "Couldn't delete that notification. It was put back; try again.",
+    "empty": "No notifications yet",
+    "emptyHint": "Alerts such as a hub going offline or being updated will show up here.",
+    "swipeHint": "Swipe a notification sideways to delete it."
+  },
+  "onboarding": {
+    "title": "Welcome to Smart Home",
+    "blurb": "Manage lighting, climate, curtains and security for every room from a single app.",
+    "getStarted": "Get started"
+  },
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Sign in to control your smart home.",
+    "google": "Continue with Google",
+    "signingIn": "Signing in…",
+    "failed": "Google sign-in failed",
+    "terms": "By continuing, you agree to let this app manage your smart home devices."
+  },
+  "home": {
+    "addRoomAria": "Add room",
+    "allDevices": "All Devices Linked",
+    "deviceCount_one": "{{count}} device",
+    "deviceCount_other": "{{count}} devices",
+    "loadingRooms": "Loading your rooms…",
+    "loadRoomsFailed": "Couldn't load your rooms",
+    "noRooms": "No rooms yet",
+    "noRoomsHint": "Add your first room to start organizing devices.",
+    "addRoomButton": "Add a room",
+    "sharedWithYou": "Shared with you",
+    "sharedWithMe": "Shared with me"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageHint": "Choose the language of the app.",
+    "logout": "Log out",
+    "comingSoon": "{{name}} is coming soon.",
+    "items": {
+      "new-brands": "New brands",
+      "profile": "Profile",
+      "household": "Household",
+      "account": "Account",
+      "sync-options": "Sync options",
+      "support": "Support",
+      "tips": "Tips"
+    },
+    "logoutDialog": {
+      "title": "Unsynced changes",
+      "body_one": "{{count}} change is not on the server yet. Signing out now would lose it.",
+      "body_other": "{{count}} changes are not on the server yet. Signing out now would lose them.",
+      "stillPending_one": "{{count}} change still couldn't be sent. Check the connection and try again, or discard it.",
+      "stillPending_other": "{{count}} changes still couldn't be sent. Check the connection and try again, or discard them.",
+      "syncThenSignOut": "Sync, then sign out",
+      "syncing": "Syncing…",
+      "discard": "Discard changes and sign out"
+    }
+  },
+  "sync": {
+    "entity": {
+      "scene": "Scene",
+      "schedule": "Schedule",
+      "device": "Device",
+      "hub": "Hub"
+    },
+    "kind": {
+      "upsert": "save",
+      "patch": "change",
+      "delete": "delete"
+    },
+    "item": "{{entity}} “{{label}}” — {{kind}}",
+    "waiting_one": "{{count}} change waiting to sync",
+    "waiting_other": "{{count}} changes waiting to sync",
+    "syncNow": "Sync now",
+    "failedBanner_one": "{{count}} change couldn't be saved to the server. Tap to review.",
+    "failedBanner_other": "{{count}} changes couldn't be saved to the server. Tap to review.",
+    "failedTitle": "Changes that couldn't be saved",
+    "failedBody": "The server refused these. Your screen may still show them until they're retried or dropped.",
+    "drop": "Drop",
+    "err": {
+      "dependencyFailed": "Not saved because what it depends on couldn't be saved ({{label}}).",
+      "dependencyDeleted": "Not saved because what it depends on was deleted ({{label}}).",
+      "needSignIn": "Waiting for you to sign in again.",
+      "offline": "Offline — will retry.",
+      "serverKeepsFailing": "The server keeps failing ({{reason}}). Try again later.",
+      "serverError": "Server error — will retry ({{reason}}).",
+      "unknown": "Unknown error"
+    }
+  },
+  "category": {
+    "lighting": "Lighting",
+    "hvac": "HVAC",
+    "ir": "IR Control",
+    "curtains": "Curtains",
+    "sensors": "Sensors",
+    "security": "Security",
+    "switches": "Switches",
+    "alarm": "Alarm",
+    "notFound": "Category not found.",
+    "addDeviceAria": "Add device",
+    "emptyTitle": "No devices in {{category}} yet",
+    "emptyHint": "Tap the + button to add a device to this category.",
+    "checkingState": "Checking current state…",
+    "controlOnly": "{{name}} was shared with you for control only, so its remote buttons and alarm can't be changed here.",
+    "removeDevice": "Remove device"
+  },
+  "roomIcon": {
+    "bed": "Bedroom",
+    "sofa": "Living room",
+    "bath": "Bathroom",
+    "chef-hat": "Kitchen",
+    "archive": "Storage",
+    "book-open": "Study",
+    "door-open": "Entrance",
+    "home": "Other"
+  },
+  "room": {
+    "notFound": "Room not found.",
+    "backHome": "Back to My Home",
+    "hubsModules": "Hubs & Modules",
+    "irHubHint": "IR Hub · tap to add a function",
+    "relayModule": "8-relay module",
+    "removeAria": "Remove {{name}}",
+    "removeTitle": "Remove {{name}}?",
+    "thisDevice": "this device",
+    "removeDescription_one": "This also removes {{count}} linked device. This can't be undone.",
+    "removeDescription_other": "This also removes {{count}} linked devices. This can't be undone.",
+    "unknown": "Unknown room",
+    "noChannels": "No channels configured."
+  },
+  "addRoom": {
+    "title": "Add a room",
+    "description": "Give your room a name and pick an icon.",
+    "placeholder": "e.g. Bedroom",
+    "submit": "Add room"
+  },
+  "transport": {
+    "title": "Connection method",
+    "auto": "Auto",
+    "autoDesc": "RS485 if wired, otherwise MQTT or Bluetooth by signal.",
+    "mqtt": "MQTT only",
+    "mqttDesc": "Always over the network. Fails if the hub is offline.",
+    "ble": "Bluetooth only",
+    "bleDesc": "Always over BLE. Fails if out of range.",
+    "rs485": "RS485 only",
+    "rs485Desc": "Always over the assigned COM port. Fails if unplugged.",
+    "comPort": "COM port",
+    "rescan": "Rescan",
+    "noPorts": "No COM ports found. Plug in the RS485 adapter, then rescan.",
+    "notAssigned": "Not assigned",
+    "listFailed": "Couldn't list COM ports."
+  },
+  "hubLive": {
+    "offline": "Offline",
+    "connecting": "Connecting…",
+    "online": "Online",
+    "bluetooth": "Bluetooth",
+    "measuredAtHub": "Measured at the hub",
+    "measuredInRoom": "Measured at the hub in this room",
+    "now": "Now {{temp}}"
+  },
+  "addDevice": {
+    "steps": {
+      "product": "Add device",
+      "provisioning": "Connect device",
+      "hubFunction": "Add a function",
+      "ac": "Add air conditioner",
+      "remote": "Add learning remote",
+      "rgb": "Add RGB light",
+      "temp": "Add temperature control",
+      "alarm": "Add alarm",
+      "relay": "Set up channels"
+    },
+    "saving": "Saving…",
+    "saveFailed": "Couldn't save. Check your connection and try again.",
+    "rgbPlaceholder": "e.g. Bedroom RGB strip",
+    "tempPlaceholder": "e.g. Living room heater",
+    "whatAdding": "What are you adding?",
+    "products": {
+      "hubIr": {
+        "name": "IR Hub",
+        "desc": "Controls ACs and other appliances via infrared — AC codes or a learning remote."
+      },
+      "relay8": {
+        "name": "8-channel relay module",
+        "desc": "8 independent on/off switches — lights, pumps, gates, or any wired load."
+      }
+    },
+    "controlPrompt": "What should <b>{{name}}</b> control?",
+    "functions": {
+      "ac": {
+        "title": "Air conditioner",
+        "desc": "Control an external AC via IR — pick brand and code, full control."
+      },
+      "remote": {
+        "title": "Learning remote",
+        "desc": "Any other device (TV, fan, soundbar…) — learn buttons from its original remote."
+      },
+      "rgb": {
+        "title": "RGB light",
+        "desc": "Native color light built into this hub — modes, brightness, color."
+      },
+      "temp": {
+        "title": "Temperature control",
+        "desc": "Native heating/cooling dial on this hub (not an external AC)."
+      },
+      "alarm": {
+        "title": "Alarm",
+        "desc": "Built-in alarm on this hub — set a time and repeat days."
+      }
+    },
+    "giveName": "Give it a name",
+    "finish": "Finish",
+    "webPairingTitle": "Pairing needs the app",
+    "webPairingBody": "Adding a new hub or relay module needs Bluetooth, which a browser page can't use here. Pair it in the Android or desktop app — afterwards you can control it from this page too."
+  },
+  "pairing": {
+    "product": {
+      "hub-ir": "IR Hub",
+      "relay8": "Relay Module"
+    },
+    "scanFailed": "Bluetooth scan failed",
+    "connectFailed": "Failed to connect over Bluetooth",
+    "provisionFailed": "Provisioning failed",
+    "wifiRejected": "The device couldn't connect to that Wi-Fi network.",
+    "offlineAfterRestart": "The device didn't come online after restarting. Check that this Wi-Fi network can reach the server, then try again.",
+    "saveFailed": "Couldn't save the device. Try again.",
+    "scanning": "Scanning for nearby devices…",
+    "scanningHint": "Make sure your {{product}} is powered on and in pairing mode.",
+    "select": "Select your device",
+    "noneFound": "No devices found nearby.",
+    "signal": "Signal {{rssi}} dBm",
+    "scanAgain": "Scan again",
+    "connecting": "Connecting to {{name}}…",
+    "sendWifi": "Send your Wi-Fi details over Bluetooth",
+    "networkName": "Network name",
+    "password": "Password",
+    "connect": "Connect",
+    "checkingWifi": "Checking your Wi-Fi…",
+    "claiming": "Device is connecting — claiming it…",
+    "checkingWifiHint": "The device is trying to join your Wi-Fi network. This can take up to 20 seconds.",
+    "claimingHint": "This can take up to 20 seconds while the device joins Wi-Fi and MQTT.",
+    "failed": "Pairing failed",
+    "tryAgain": "Try again",
+    "connectedName": "Connected! Give it a name"
+  },
+  "errors": {
+    "alarmNotPaired": "This hub isn't paired over the network yet, so the alarm wasn't sent to it.",
+    "alarmUnreachable": "Couldn't reach {{hub}}. The alarm may not ring as set.",
+    "scheduleSyncFailed": "Saved, but couldn't send it to: {{hubs}}. Check the hub is online or nearby, then save again.",
+    "bleNotFound": "Device {{id}} not found over Bluetooth (out of range?)",
+    "noComPort": "No COM port assigned to this device yet — set one in the hub's settings.",
+    "googleTimeout": "Google sign-in timed out",
+    "googleCancelled": "Google sign-in was cancelled",
+    "requestFailed": "Request failed with status {{status}}",
+    "bleServices": "Failed to discover BLE services: {{services}}",
+    "notInBrowser": "This connection method needs the app: a browser can only reach the device through the server."
+  },
+  "relaySetup": {
+    "defaultName": "Relay {{n}}",
+    "notPaired": "This hub isn't paired over the network yet.",
+    "unreachable": "Couldn't reach the relay module.",
+    "intro": "Name each of the 8 channels and pick where they belong.",
+    "tested": "Tested ✓",
+    "test": "Test",
+    "finish": "Finish setup"
+  },
+  "remoteSetup": {
+    "defaultName": "Remote",
+    "whatSettingUp": "What are you setting up? (e.g. Living room TV)",
+    "namePlaceholder": "Device name",
+    "pointRemote": "Point the original remote at the hub and press “{{label}}”",
+    "learning": "Learning…",
+    "addAtLeast": "Add at least one button for <b>{{name}}</b>",
+    "finish_one": "Finish ({{count}} button)",
+    "finish_other": "Finish ({{count}} buttons)"
+  },
+  "alarmSetup": {
+    "defaultName": "Alarm",
+    "placeholder": "e.g. Wake up alarm",
+    "time": "Time",
+    "repeat": "Repeat",
+    "noRepeat": "No repeat days selected — this alarm won't ring.",
+    "sending": "Sending to hub…"
+  },
+  "acSetup": {
+    "notPaired": "This hub isn't paired over the network yet, so nothing could be sent to it.",
+    "testFailedDefault": "Couldn't send the test signal.",
+    "defaultNameBrand": "{{brand}} AC",
+    "myAc": "My AC",
+    "selectBrand": "Select your AC brand",
+    "cantFind": "Can't find my brand — learn manually",
+    "noneWorked": "None of the {{brand}} codes worked",
+    "triedAll_one": "We tried all {{count}} known {{brand}} variant. Check that the hub is pointed at the AC, or teach it from your remote.",
+    "triedAll_other": "We tried all {{count}} known {{brand}} variants. Check that the hub is pointed at the AC, or teach it from your remote.",
+    "retryBrand": "Try {{brand}} codes again",
+    "learnManually": "Learn manually",
+    "pickAnother": "Pick another brand",
+    "testing": "Testing {{brand}} · code {{index}} of {{total}}…",
+    "testingHint": "Sending a signal to turn your AC on (cool, 24°).",
+    "sendFailed": "Couldn't send the test signal",
+    "signalSent": "Signal sent · {{brand}} code {{index}} of {{total}}. Did your AC respond?",
+    "checkAc": "Check the AC itself — did it turn on or beep just now? Confirm by hand, it won't detect this automatically.",
+    "nextCode": "No, try next code",
+    "noneWorkedShort": "No, none worked",
+    "yesWorked": "Yes, it worked",
+    "sendAgain": "Send again",
+    "noneOfThese": "None of these worked — learn manually",
+    "buttonN": "Button {{index}} of {{total}}",
+    "learnThis": "Learn this button",
+    "itWorks": "It works! Name your AC",
+    "allSet": "All set — name your AC"
+  },
+  "remoteButton": {
+    "power": "Power",
+    "nav-up": "Up",
+    "nav-down": "Down",
+    "nav-left": "Left",
+    "nav-right": "Right",
+    "nav-ok": "OK",
+    "nav-back": "Back",
+    "nav-home": "Home",
+    "nav-menu": "Menu",
+    "vol-up": "Vol +",
+    "vol-down": "Vol -",
+    "vol-mute": "Mute",
+    "ch-up": "Ch +",
+    "ch-down": "Ch -",
+    "play-pause": "Play/Pause",
+    "stop": "Stop",
+    "rewind": "Rewind",
+    "forward": "Forward",
+    "prev": "Previous",
+    "next": "Next",
+    "ac-temp-up": "Temp +",
+    "ac-temp-down": "Temp -",
+    "ac-mode": "Mode",
+    "ac-fan": "Fan speed"
+  },
+  "remoteGroup": {
+    "power": "Power",
+    "nav": "Nav",
+    "volume": "Volume",
+    "playback": "Media",
+    "numbers": "Numbers",
+    "custom": "Custom"
+  },
+  "remotePicker": {
+    "title": "Add a button",
+    "customPlaceholder": "Custom button name"
+  },
+  "device": {
+    "via": "via {{hub}}",
+    "power": "Power",
+    "shade": "Shade {{n}}",
+    "colorWheel": "Color wheel"
+  },
+  "ac": {
+    "subject": {
+      "child": "Child",
+      "adult": "Adult",
+      "elder": "Elder"
+    },
+    "mode": {
+      "cool": "Cool",
+      "heat": "Heat",
+      "fan": "Fan",
+      "auto": "Auto",
+      "dry": "Dry"
+    },
+    "fan": {
+      "auto": "Auto",
+      "low": "Low",
+      "min": "Min",
+      "medium": "Medium",
+      "high": "High",
+      "max": "Max"
+    },
+    "swing": {
+      "highest": "Highest",
+      "middle": "Middle",
+      "lowest": "Lowest",
+      "auto": "Auto"
+    },
+    "decreaseTemp": "Decrease temperature",
+    "increaseTemp": "Increase temperature",
+    "modeLabel": "Mode",
+    "fanSpeed": "Fan speed",
+    "swingVertical": "Swing (vertical)",
+    "swingButton": "Swing",
+    "sleepMode": "Sleep mode",
+    "sleepFor": "For",
+    "wakeAt": "Wake at",
+    "targetTemp": "Target temp",
+    "defaultTemp": "Default ({{temp}}°)",
+    "decreaseSleepTemp": "Decrease sleep temperature",
+    "increaseSleepTemp": "Increase sleep temperature",
+    "reset": "Reset"
+  },
+  "rgb": {
+    "effect": {
+      "solid": "Solid",
+      "blink": "Blink",
+      "breathe": "Breathe",
+      "flow": "Flow",
+      "chase": "Chase"
+    },
+    "effectLabel": "Effect",
+    "speed": "Speed",
+    "brightness": "Brightness",
+    "color": "Color"
+  },
+  "light": {
+    "mode": {
+      "morning": "Morning",
+      "day": "Day",
+      "night": "Night"
+    },
+    "modeLabel": "Mode",
+    "intensity": "Intensity",
+    "shades": "Shades"
+  },
+  "remotePanel": {
+    "editLayout": "Edit layout"
+  },
+  "automation": {
+    "createAria": "Create automation",
+    "tabScenes": "Scenes",
+    "tabSchedules": "Schedules",
+    "runFailed": "Couldn't run the scene.",
+    "unreachable": "Couldn't reach: {{hubs}}. Check the hub is online or nearby, then try again.",
+    "noScenes": "No scenes yet",
+    "noScenesHint": "A scene saves a set of device states you can trigger with one tap.",
+    "createScene": "Create a scene",
+    "running": "Running…",
+    "activated": "Activated",
+    "activate": "Activate",
+    "noSchedules": "No schedules yet",
+    "noSchedulesHint": "Run a scene automatically at a set time and repeat days.",
+    "createSchedule": "Create a schedule",
+    "sceneRemoved": "Scene was removed",
+    "thisScene": "this scene",
+    "thisSchedule": "this schedule",
+    "removeSceneHint": "Schedules pointing to this scene will show a warning.",
+    "everyDay": "Every day"
+  },
+  "scheduleForm": {
+    "newName": "New schedule",
+    "defaultName": "Schedule",
+    "saveFailed": "Failed to save schedule",
+    "needScene": "You need a scene first",
+    "needSceneHint": "Schedules run an existing scene at a set time — create one first.",
+    "namePlaceholder": "Schedule name",
+    "sceneToRun": "Scene to run",
+    "startAt": "Start at",
+    "revertTitle": "Also revert at a time",
+    "revertHint": "Undo the scene automatically after this window",
+    "endAt": "End at",
+    "enabled": "Enabled"
+  },
+  "sceneForm": {
+    "newName": "New scene",
+    "defaultName": "Scene",
+    "saveFailed": "Failed to save scene",
+    "namePlaceholder": "Scene name",
+    "hint": "Pick devices and set the state you want this scene to apply."
+  },
+  "sceneEditor": {
+    "turnOn": "Turn on",
+    "noEligible": "No eligible devices yet — add a light, AC, RGB light, or switch first.",
+    "collapse": "Collapse",
+    "expand": "Expand"
+  },
+  "favorites": {
+    "addAria": "Add favorite",
+    "items": {
+      "fav-dimmer": "Dimmer",
+      "fav-tubelight": "Tubelight",
+      "fav-bedlamp": "Bed lamp",
+      "fav-thermostat": "Hall thermostat",
+      "fav-ac": "AC",
+      "fav-lock": "Front door lock",
+      "fav-curtain": "Curtain",
+      "fav-presence": "Presence mode"
+    }
+  },
+  "ota": {
+    "available": "Firmware {{newVersion}} is available (current {{currentVersion}}).",
+    "starting": "Starting…",
+    "updateNow": "Update now",
+    "updating": "Updating to {{version}}…",
+    "updated": "Updated to {{version}}.",
+    "dismiss": "Dismiss",
+    "failed": "Update to {{version}} failed.",
+    "retrying": "Retrying…"
+  },
+  "household": {
+    "loadFailed": "Couldn't load your shares.",
+    "inviteFailed": "Couldn't create the invite.",
+    "joined": "You can now use {{targets}} from {{owner}}.",
+    "joinFailed": "Couldn't use that code.",
+    "endFailed": "Couldn't end that share.",
+    "scopeRoom": "Whole room",
+    "scopeDevice": "One device",
+    "fromOwner": "from {{email}}",
+    "withMember": "with {{email}}",
+    "leave": "Leave",
+    "revoke": "Revoke",
+    "joinTitle": "Join with a code",
+    "codePlaceholder": "Invite code",
+    "scanAria": "Scan a QR code",
+    "join": "Join",
+    "nothingShared": "Nothing has been shared with you yet.",
+    "youreSharing": "You're sharing",
+    "nothingGiven": "You haven't shared anything yet.",
+    "shareTitle": "Share",
+    "shareHint": "Tick a room to share all of it (they can also add their own devices there), or tick devices one by one (control only).",
+    "inviteTitleOne": "Share “{{name}}”",
+    "inviteTitleMany_one": "Share {{count}} item",
+    "inviteTitleMany_other": "Share {{count}} items",
+    "inviteHint": "Scan the code with their phone's camera, or have them type it in Household → Join. It works once and expires {{when}}.",
+    "roomAccess": "whole room — control it, automate it, add their own devices",
+    "deviceAccess": "control only",
+    "qrAlt": "Invite QR code",
+    "notInRoom": "Not in a room",
+    "shareRoomAria": "Share the whole room {{name}}",
+    "shareDeviceAria": "Share {{name}}",
+    "addFirst": "Add a room or a device first.",
+    "pickToShare": "Pick rooms or devices to share",
+    "shareSelected": "Share {{count}} selected"
+  },
+  "qrScan": {
+    "title": "Scan invite code",
+    "description": "Point the camera at the QR code on the other phone or screen.",
+    "denied": "Camera access was denied. Allow it in your system settings, or type the code instead.",
+    "notFound": "No camera found. Type the code instead.",
+    "busy": "The camera is being used by another app.",
+    "failed": "Couldn't start the camera. Type the code instead.",
+    "unavailable": "The camera isn't available here. Type the code instead."
+  },
+  "apiError": {
+    "COMMON_VALIDATION_FAILED": "Validation failed",
+    "AUTH_INVALID_CREDENTIALS": "Invalid email or password",
+    "AUTH_LOGIN_REQUIRED": "Authentication is required for password change OTP verification",
+    "AUTH_ACCOUNT_NOT_FOUND": "Account not found",
+    "AUTH_ACCOUNT_UNAVAILABLE": "Account is not available",
+    "AUTH_ACCOUNT_INACTIVE": "Account is not active",
+    "AUTH_EMAIL_EXISTS": "Email already exists",
+    "AUTH_EMAIL_INVALID": "Invalid email address",
+    "AUTH_EMAIL_DOMAIN_NOT_ALLOWED": "Email domain is not allowed",
+    "AUTH_EMAIL_DISPOSABLE": "Disposable email addresses are not allowed",
+    "AUTH_EMAIL_REQUIRED_FOR_RESET": "Email is required for password reset OTP verification",
+    "AUTH_EMAIL_SEND_FAILED": "Unable to send verification email",
+    "AUTH_PASSWORD_MISMATCH": "Password confirmation does not match",
+    "AUTH_PASSWORD_UNCHANGED": "New password must be different from current password",
+    "AUTH_RESET_INVALID": "Invalid password reset request",
+    "AUTH_REFRESH_TOKEN_INVALID": "Invalid refresh token",
+    "AUTH_OTP_REQUIRED": "Email OTP is required",
+    "AUTH_OTP_INVALID": "Invalid email OTP",
+    "AUTH_OTP_EXPIRED": "Email OTP has expired",
+    "AUTH_OTP_ATTEMPTS_EXCEEDED": "OTP attempt limit exceeded; request a new OTP",
+    "AUTH_OTP_RESEND_TOO_SOON": "OTP can only be resent after {{seconds}} seconds",
+    "AUTH_OTP_SEND_LIMIT": "OTP send limit exceeded",
+    "AUTH_GOOGLE_TOKEN_INVALID": "Invalid Google ID token",
+    "AUTH_GOOGLE_EMAIL_UNVERIFIED": "Google account email is not verified",
+    "AUTH_GOOGLE_EMAIL_MISSING": "Google ID token has no email claim",
+    "COMMON_INVALID_ID": "Invalid id",
+    "COMMON_FIELD_REQUIRED": "{{field}} must be a non-empty string",
+    "ROOM_NOT_FOUND": "Room not found",
+    "ROOM_ADD_DEVICE_FORBIDDEN": "You can't add devices to this room",
+    "ROOM_ID_REQUIRED": "roomId is required",
+    "HUB_NOT_FOUND": "Hub not found",
+    "HUB_REMOVE_FORBIDDEN": "You can't remove this device",
+    "HUB_EDIT_FORBIDDEN": "You can't edit this device",
+    "DEVICE_NOT_FOUND": "Device not found",
+    "DEVICE_REMOVE_FORBIDDEN": "You can't remove this device",
+    "DEVICE_EDIT_FORBIDDEN": "You can't edit this device",
+    "DEVICE_CONTROL_ONLY": "You can only control this device, not configure it",
+    "DEVICE_HUB_NOT_OWNED": "That hub belongs to someone else",
+    "DEVICE_ATTRIBUTES_TOO_LARGE": "Device attributes are too large",
+    "DEVICE_OWNER_ONLY_FIELD": "Only the owner can change {{field}}",
+    "SCENE_NOT_FOUND": "Scene not found",
+    "SCENE_DEVICE_CONTROL_ONLY": "You can't automate a device that was only shared for control",
+    "SCHEDULE_NOT_FOUND": "Schedule not found",
+    "SCHEDULE_SCENE_NOT_FOUND": "Scene not found: {{sceneId}}",
+    "NOTIFICATION_NOT_FOUND": "Notification not found",
+    "SHARE_NOT_FOUND": "Share not found",
+    "SHARE_NOTHING": "Nothing to share",
+    "SHARE_DEVICE_ID_REQUIRED": "deviceId is required",
+    "SHARE_CODE_INVALID": "That code isn't valid any more",
+    "SHARE_OWN_INVITE": "This is your own invite"
+  },
+  "authCallback": {
+    "signingIn": "Signing you in…",
+    "failed": "Sign-in didn't complete",
+    "backToLogin": "Back to sign in"
+  }
+}
