@@ -78,7 +78,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8 lg:mx-0 lg:max-w-full">
       <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
 
       <div className="flex items-center gap-3 rounded-2xl bg-brand-gradient px-4 py-4 text-primary-foreground shadow-lg shadow-primary/20">

@@ -81,7 +81,7 @@ function ScheduleFormContent() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8 lg:mx-0 lg:max-w-full">
       <div className="flex items-center justify-between">
         <button
           type="button"

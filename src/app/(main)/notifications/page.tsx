@@ -53,7 +53,7 @@ export default function NotificationsPage() {
   }, [fetchNotifications]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8 lg:mx-0 lg:max-w-full">
       <h1 className="text-2xl font-bold">{t("nav.notifications")}</h1>
 
       <OtaBanners />
