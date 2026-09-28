@@ -23,11 +23,11 @@ export default function SplashPage() {
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-brand-gradient text-primary-foreground">
-      <span className="flex size-20 items-center justify-center rounded-3xl bg-white/15">
+      <span className="flex size-20 items-center justify-center rounded-3xl bg-primary-foreground/15">
         <House className="size-10" strokeWidth={1.6} />
       </span>
       <h1 className="text-xl font-bold tracking-tight">{t("app.name")}</h1>
-      <p className="text-sm text-white/80">{t("app.tagline")}</p>
+      <p className="text-sm text-primary-foreground/80">{t("app.tagline")}</p>
     </main>
   );
 }

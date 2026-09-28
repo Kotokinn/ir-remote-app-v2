@@ -63,7 +63,7 @@ export default function FavoritesPage() {
               <span
                 className={cn(
                   "text-[10px] font-semibold tracking-wide uppercase",
-                  device.isOn ? "text-white/80" : "text-muted-foreground"
+                  device.isOn ? "text-primary-foreground/80" : "text-muted-foreground"
                 )}
               >
                 {device.isOn ? t("common.on") : t("common.off")}

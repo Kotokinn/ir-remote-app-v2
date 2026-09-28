@@ -1,6 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
+#[cfg(desktop)]
+use tauri::Manager;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
@@ -81,86 +83,31 @@ async fn oauth_loopback_listen(app: tauri::AppHandle) -> Result<String, String> 
   Ok(query)
 }
 
+// Embedded at compile time (works the same in a bundled/installed app, no runtime file lookup relative
+// to the exe) — edit assets/oauth-callback.html directly, its __PLACEHOLDER__s are filled in below.
+const OAUTH_CALLBACK_TEMPLATE: &str = include_str!("../assets/oauth-callback.html");
+
 fn render_callback_page(has_error: bool) -> String {
-  let (icon, title, message) = if has_error {
+  // Which icon shows is a CSS toggle in the template itself (body.success / body.error) — this only
+  // says which state it is, not which icon markup to use.
+  let (state, title, message) = if has_error {
     (
-      "\u{26A0}\u{FE0F}",
+      "error",
       "Sign-in didn't complete",
       "Something went wrong or you cancelled the request. You can close this window and try again from the app.",
     )
   } else {
     (
-      "\u{2705}",
+      "success",
       "Sign-in complete",
       "You're all set - you can close this window and return to the app.",
     )
   };
 
-  format!(
-    r#"<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>{title}</title>
-<style>
-  :root {{ color-scheme: light dark; }}
-  * {{ box-sizing: border-box; }}
-  body {{
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 24px;
-  }}
-  .card {{
-    background: #ffffff;
-    border-radius: 20px;
-    padding: 40px 36px;
-    max-width: 380px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(79, 70, 229, 0.35);
-  }}
-  .icon {{
-    font-size: 48px;
-    line-height: 1;
-    margin-bottom: 16px;
-  }}
-  h1 {{
-    font-size: 20px;
-    margin: 0 0 12px;
-    color: #1f2937;
-  }}
-  p {{
-    font-size: 14px;
-    line-height: 1.6;
-    color: #6b7280;
-    margin: 0;
-  }}
-  .hint {{
-    margin-top: 24px;
-    font-size: 12px;
-    color: #9ca3af;
-  }}
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">{icon}</div>
-    <h1>{title}</h1>
-    <p>{message}</p>
-    <div class="hint">This window will try to close automatically.</div>
-  </div>
-  <script>
-    setTimeout(function () {{ window.close(); }}, 500);
-  </script>
-</body>
-</html>"#
-  )
+  OAUTH_CALLBACK_TEMPLATE
+    .replace("__STATE__", state)
+    .replace("__TITLE__", title)
+    .replace("__MESSAGE__", message)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -170,7 +117,19 @@ pub fn run() {
 
   #[cfg(desktop)]
   {
-    builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}));
+    // Fires in the ALREADY-RUNNING instance when a second launch happens (e.g. the OS invoking us
+    // again for a smarthome:// link while the app is already open — Windows/Linux have no other way
+    // to deliver it). The "deep-link" feature on this plugin (Cargo.toml) already re-dispatches that
+    // second launch's argv into the deep-link plugin's own onOpenUrl/getCurrent (so the frontend's
+    // listeners still fire); what it does NOT do is bring the window forward, so without this the
+    // link is handled but the app just sits there — indistinguishable from "the app didn't open".
+    builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+      }
+    }));
   }
 
   // FCM push tokens exist on mobile only (desktop has no FCM).

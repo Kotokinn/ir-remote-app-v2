@@ -82,12 +82,12 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
 
       <div className="flex items-center gap-3 rounded-2xl bg-brand-gradient px-4 py-4 text-primary-foreground shadow-lg shadow-primary/20">
-        <span className="flex size-12 items-center justify-center rounded-full bg-white/20">
+        <span className="flex size-12 items-center justify-center rounded-full bg-primary-foreground/20">
           <UserRound className="size-6" />
         </span>
         <div className="flex flex-col">
           <span className="text-sm font-semibold">{displayName}</span>
-          {hasName && <span className="text-xs text-white/80">{account?.email}</span>}
+          {hasName && <span className="text-xs text-primary-foreground/80">{account?.email}</span>}
         </div>
       </div>
 

@@ -129,7 +129,7 @@ function HouseholdContent() {
   const ownDevices = devices.filter((device) => device.access !== "room" && device.access !== "device");
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col">
+    <div className="mx-auto flex w-full max-w-2xl flex-col lg:max-w-full">
       <PageHeader title={t("settings.items.household")} />
       <div className="flex flex-col gap-5 px-4 pb-6">
         {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import { runsInApp } from "@/lib/platform";
+import { focusAppWindow, runsInApp } from "@/lib/platform";
 import { parseInviteCode } from "@/lib/sharing";
 
 /**
@@ -34,7 +34,12 @@ export function JoinLinkListener() {
     getCurrent()
       .then(open)
       .catch(() => undefined);
-    onOpenUrl(open)
+    // Unlike the cold-start getCurrent() above, this fires while already running — the window may be
+    // minimized or behind another one, so bring it forward (see lib/platform.ts's focusAppWindow).
+    onOpenUrl((urls) => {
+      open(urls);
+      void focusAppWindow();
+    })
       .then((stop) => {
         if (cancelled) stop();
         else unlisten = stop;

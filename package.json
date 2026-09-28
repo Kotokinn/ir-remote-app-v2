@@ -12,7 +12,8 @@
     "test": "vitest",
     "tauri": "tauri",
     "android:sign": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-android.ps1",
-    "android:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-android.ps1 -Build"
+    "android:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-android.ps1 -Build",
+    "theme": "node scripts/theme.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -41,10 +41,10 @@ export default function MyHomePage() {
         className="flex items-center gap-4 rounded-2xl bg-brand-gradient px-5 py-5 text-primary-foreground shadow-lg shadow-primary/20"
       >
         <HomeIcon className="size-9" strokeWidth={1.5} />
-        <div className="h-8 w-px bg-white/30" />
+        <div className="h-8 w-px bg-primary-foreground/30" />
         <div className="flex flex-col">
           <span className="text-base font-semibold">{t("home.allDevices")}</span>
-          <span className="text-sm text-white/80">{t("home.deviceCount", { count: devices.length })}</span>
+          <span className="text-sm text-primary-foreground/80">{t("home.deviceCount", { count: devices.length })}</span>
         </div>
       </Link>
 

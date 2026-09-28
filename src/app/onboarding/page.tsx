@@ -13,7 +13,7 @@ export default function OnboardingPage() {
           {[Lightbulb, Thermometer, ShieldCheck].map((Icon, i) => (
             <span
               key={i}
-              className="flex size-12 items-center justify-center rounded-2xl bg-white/15"
+              className="flex size-12 items-center justify-center rounded-2xl bg-primary-foreground/15"
             >
               <Icon className="size-5" />
             </span>
@@ -21,7 +21,7 @@ export default function OnboardingPage() {
         </div>
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="text-xl font-bold">{t("onboarding.title")}</h1>
-          <p className="text-sm text-white/85">
+          <p className="text-sm text-primary-foreground/85">
             {t("onboarding.blurb")}
           </p>
         </div>
