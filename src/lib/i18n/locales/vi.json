@@ -239,8 +239,8 @@
     },
     "giveName": "Đặt tên cho nó",
     "finish": "Hoàn tất",
-    "webPairingTitle": "Ghép nối cần dùng ứng dụng",
-    "webPairingBody": "Thêm hub hoặc module relay mới cần Bluetooth, mà trang trình duyệt không dùng được ở đây. Hãy ghép nối trong ứng dụng Android hoặc máy tính — sau đó bạn cũng điều khiển được từ trang này."
+    "webPairingTitle": "Trình duyệt này không ghép nối được qua Bluetooth",
+    "webPairingBody": "Trình duyệt này không ghép nối Bluetooth được (Chrome hoặc Edge thì được). Hãy dùng một trong hai trình duyệt đó, hoặc ứng dụng Android/máy tính — sau đó bạn vẫn điều khiển được từ trang này."
   },
   "pairing": {
     "product": {
@@ -270,7 +270,9 @@
     "claimingHint": "Việc này có thể mất tới 20 giây trong khi thiết bị kết nối Wi-Fi và MQTT.",
     "failed": "Ghép nối thất bại",
     "tryAgain": "Thử lại",
-    "connectedName": "Đã kết nối! Hãy đặt tên cho nó"
+    "connectedName": "Đã kết nối! Hãy đặt tên cho nó",
+    "webSelectTitle": "Chọn thiết bị của bạn",
+    "webSelectButton": "Chọn thiết bị Bluetooth"
   },
   "errors": {
     "alarmNotPaired": "Hub này chưa được ghép nối qua mạng nên báo thức chưa được gửi tới nó.",
@@ -282,7 +284,13 @@
     "googleCancelled": "Đăng nhập Google đã bị huỷ",
     "requestFailed": "Yêu cầu thất bại với mã trạng thái {{status}}",
     "bleServices": "Không phát hiện được dịch vụ BLE: {{services}}",
-    "notInBrowser": "Phương thức kết nối này cần dùng ứng dụng: trình duyệt chỉ điều khiển thiết bị thông qua máy chủ."
+    "webBluetoothUnsupported": "Trình duyệt này không hỗ trợ Bluetooth (hãy thử Chrome hoặc Edge).",
+    "webBluetoothNotGranted": "{{name}} chưa được kết nối qua Bluetooth trên trình duyệt này — hãy mở phần cài đặt kết nối để chọn lại.",
+    "webBluetoothNotConnected": "Chưa kết nối qua Bluetooth.",
+    "webSerialUnsupported": "Trình duyệt này không hỗ trợ cổng serial (hãy thử Chrome hoặc Edge trên máy tính).",
+    "serialPortGone": "Cổng {{id}} không còn khả dụng — hãy chọn lại.",
+    "serialNoResponse": "Không có phản hồi trong {{timeoutMs}}ms.",
+    "serialOpenFailed": "Không mở được {{port}}: {{error}}"
   },
   "relaySetup": {
     "defaultName": "Relay {{n}}",

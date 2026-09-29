@@ -4,6 +4,18 @@
 // deviceId to hand off to mqtt-service's claim flow afterward.
 import { t } from "@/lib/i18n";
 import { connect, disconnect, getScanningUpdates, listServices, sendString, startScan, subscribeString, unsubscribe } from "@mnlphlp/plugin-blec";
+import { HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID } from "@/lib/device/ble-constants";
+import { runsInApp } from "@/lib/platform";
+import {
+  connect as webConnect,
+  disconnect as webDisconnect,
+  requestHub,
+  subscribeString as webSubscribeString,
+  unsubscribeString as webUnsubscribeString,
+  writeString as webWriteString,
+} from "@/lib/device/web-bluetooth";
+
+export { HUB_SERVICE_UUID, HUB_CHARACTERISTIC_UUID } from "@/lib/device/ble-constants";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -30,9 +42,6 @@ export function describeBleError(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export const HUB_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-export const HUB_CHARACTERISTIC_UUID = "bd4fcc47-3393-40d5-966e-7d38db846eab";
-
 export interface ScannedHub {
   address: string;
   /** Also the device's real deviceId once connected — see docs/MQTT_API.md "Định danh thiết bị". */
@@ -40,7 +49,18 @@ export interface ScannedHub {
   rssi: number;
 }
 
+/**
+ * In a browser, "scanning" is a single native chooser dialog (Web Bluetooth has no API for a live list
+ * of nearby devices with RSSI) — it must be called directly from a click handler (see
+ * components/home/add-device/ble-provisioning.tsx's web branch), and resolves with exactly one device,
+ * already chosen by the user.
+ */
 export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
+  if (!runsInApp()) {
+    const hub = await requestHub();
+    return [{ ...hub, rssi: 0 }];
+  }
+
   const found = new Map<string, ScannedHub>();
 
   // startScan's own `timeout` already stops the scan internally — calling stopScan() again
@@ -72,6 +92,11 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
 }
 
 export async function connectToHub(address: string, onDisconnect?: () => void): Promise<void> {
+  if (!runsInApp()) {
+    await webConnect(address, onDisconnect);
+    return;
+  }
+
   // btleplug's Windows (WinRT) backend can throw a transient E_ABORT ("Operation aborted")
   // on the first connect attempt right after a scan, even with the settle buffer above —
   // documented flakiness in the underlying WinRT Bluetooth APIs. One retry clears it in
@@ -96,6 +121,11 @@ export async function connectToHub(address: string, onDisconnect?: () => void): 
 }
 
 export async function disconnectFromHub(): Promise<void> {
+  if (!runsInApp()) {
+    await webUnsubscribeString().catch(() => undefined);
+    webDisconnect();
+    return;
+  }
   await unsubscribe(HUB_CHARACTERISTIC_UUID).catch(() => undefined);
   await disconnect();
 }
@@ -126,13 +156,13 @@ export interface ProvisionResult {
  * claim step, which only succeeds once the device is really online on the new network. Real
  * GATT failures (subscribe/write) still reject.
  */
-export async function provisionWifi(
-  ssid: string,
-  ssidPassword: string,
-  timeZone: string,
-  // The device now test-connects to the WiFi (up to WIFI_CONNECT_TIMEOUT_MS = 20s) BEFORE it
-  // replies, so the ACK legitimately takes that long on a wrong password.
-  ackTimeoutMs = 30000
+/** The init|{...} ACK-waiting protocol shared by both transports — only how a frame is subscribed/sent differs. */
+async function raceForAck(
+  ackTimeoutMs: number,
+  subscribe: (onFrame: (data: string) => void) => Promise<void>,
+  send: (frame: string) => Promise<void>,
+  unsub: () => Promise<void>,
+  frame: string
 ): Promise<ProvisionResult> {
   const receivedFrames: string[] = [];
   let resolveAck: (ack: InitAck) => void = () => undefined;
@@ -140,9 +170,7 @@ export async function provisionWifi(
     resolveAck = resolve;
   });
 
-  // WinRT GATT can't have a subscribe (CCCD write) and a characteristic write in flight at the
-  // same time on the same characteristic — subscribe must fully complete before the write.
-  await subscribeString(HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID, (data) => {
+  await subscribe((data) => {
     console.info("[ble] notification frame:", data);
     receivedFrames.push(data);
     const separatorIndex = data.indexOf("|");
@@ -154,17 +182,11 @@ export async function provisionWifi(
     }
   });
 
-  // Even after the subscribe promise resolves WinRT can still be finishing the CCCD write.
-  await sleep(200);
-
-  const payload = JSON.stringify({ ssid, ssid_pass: ssidPassword, time_zone: timeZone });
-  // withoutResponse: WinRT's write-with-response completion path threw E_ABORT even though the
-  // device received the full payload; the characteristic also advertises WRITE_NR.
-  await sendString(HUB_CHARACTERISTIC_UUID, `init|${payload}`, "withoutResponse", HUB_SERVICE_UUID);
+  await send(frame);
 
   const ack = await Promise.race([ackPromise, sleep(ackTimeoutMs).then(() => undefined)]);
   // The device reboots right after acking, so the link may already be gone — ignore failures.
-  unsubscribe(HUB_CHARACTERISTIC_UUID).catch(() => undefined);
+  unsub().catch(() => undefined);
 
   if (!ack) {
     console.warn(
@@ -174,4 +196,42 @@ export async function provisionWifi(
     return { acked: false };
   }
   return { acked: true, ack };
+}
+
+export async function provisionWifi(
+  ssid: string,
+  ssidPassword: string,
+  timeZone: string,
+  // The device now test-connects to the WiFi (up to WIFI_CONNECT_TIMEOUT_MS = 20s) BEFORE it
+  // replies, so the ACK legitimately takes that long on a wrong password.
+  ackTimeoutMs = 30000
+): Promise<ProvisionResult> {
+  const payload = JSON.stringify({ ssid, ssid_pass: ssidPassword, time_zone: timeZone });
+  const frame = `init|${payload}`;
+
+  if (!runsInApp()) {
+    return raceForAck(
+      ackTimeoutMs,
+      (onFrame) => webSubscribeString(onFrame),
+      (f) => webWriteString(f),
+      () => webUnsubscribeString(),
+      frame
+    );
+  }
+
+  return raceForAck(
+    ackTimeoutMs,
+    async (onFrame) => {
+      // WinRT GATT can't have a subscribe (CCCD write) and a characteristic write in flight at the
+      // same time on the same characteristic — subscribe must fully complete before the write.
+      await subscribeString(HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID, onFrame);
+      // Even after the subscribe promise resolves WinRT can still be finishing the CCCD write.
+      await sleep(200);
+    },
+    // withoutResponse: WinRT's write-with-response completion path threw E_ABORT even though the
+    // device received the full payload; the characteristic also advertises WRITE_NR.
+    (f) => sendString(HUB_CHARACTERISTIC_UUID, f, "withoutResponse", HUB_SERVICE_UUID),
+    () => unsubscribe(HUB_CHARACTERISTIC_UUID),
+    frame
+  );
 }

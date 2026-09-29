@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "@/lib/i18n";
 import { useRunsInApp } from "@/lib/platform";
+import { isWebBluetoothSupported } from "@/lib/device/web-bluetooth";
 import { errorMessage } from "@/lib/i18n/errors";
 import { SHADE_COLORS, type Device } from "@/lib/mock-data";
 import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
@@ -115,7 +116,7 @@ export function AddDeviceFlow({
         />
       )}
 
-      {step.name === "provisioning" && !inApp && (
+      {step.name === "provisioning" && !inApp && !isWebBluetoothSupported() && (
         <div className="flex flex-col items-center gap-3 pt-10 text-center">
           <p className="text-sm font-medium">{t("addDevice.webPairingTitle")}</p>
           <p className="text-xs text-muted-foreground">{t("addDevice.webPairingBody")}</p>
@@ -131,7 +132,7 @@ export function AddDeviceFlow({
         </div>
       )}
 
-      {step.name === "provisioning" && inApp && (
+      {step.name === "provisioning" && (inApp || isWebBluetoothSupported()) && (
         <BleProvisioning
           product={step.product}
           roomId={roomId}

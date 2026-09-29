@@ -201,7 +201,7 @@ export function CategoryClient({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pt-5 pb-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pt-5 pb-6 lg:max-w-full lg:px-8">
       <div className="flex items-center gap-2 px-4 lg:px-0">
         <button
           type="button"

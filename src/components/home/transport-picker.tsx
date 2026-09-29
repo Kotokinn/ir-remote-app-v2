@@ -10,9 +10,11 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { useRunsInApp } from "@/lib/platform";
 import { useHubsStore, type PhysicalDevice, type TransportPreference } from "@/lib/store/hubs-store";
-import { listSerialPorts } from "@/lib/device/serial-transport";
+import { listSerialPorts, requestSerialPortAccess } from "@/lib/device/serial-transport";
+import { isWebBluetoothSupported } from "@/lib/device/web-bluetooth";
+import { isWebSerialSupported } from "@/lib/device/web-serial";
+import { runsInApp } from "@/lib/platform";
 import type { TKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +33,6 @@ const OPTIONS: Array<{ id: TransportPreference; labelKey: TKey; descriptionKey: 
  */
 export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
   const { t } = useTranslation();
-  const inApp = useRunsInApp();
   const updatePhysicalDevice = useHubsStore((s) => s.updatePhysicalDevice);
   const [open, setOpen] = useState(false);
   const [ports, setPorts] = useState<string[]>(hub.serialPort ? [hub.serialPort] : []);
@@ -39,9 +40,17 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
   const [scanError, setScanError] = useState("");
 
   const current = hub.preferredTransport ?? "auto";
-  const options = hub.productType === "relay8" ? OPTIONS : OPTIONS.filter((o) => o.id !== "rs485");
+  // Bluetooth and RS485 are each only offered where they can actually work: always in the app, and in the
+  // browser only where the matching Web API exists (Chrome/Edge — see the two isWeb*Supported() checks).
+  const bleAvailable = runsInApp() || isWebBluetoothSupported();
+  const serialAvailable = hub.productType === "relay8" && (runsInApp() || isWebSerialSupported());
+  const options = OPTIONS.filter((option) => {
+    if (option.id === "ble") return bleAvailable;
+    if (option.id === "rs485") return serialAvailable;
+    return true;
+  });
 
-  function scanPorts() {
+  function listPorts() {
     setScanning(true);
     setScanError("");
     listSerialPorts()
@@ -56,8 +65,23 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
       });
   }
 
-  // Bluetooth and RS485 are the app's: a browser only ever talks to the server, so there is nothing to choose.
-  if (!inApp) return null;
+  // In the app, "Rescan" just re-lists every COM port the OS sees. In the browser, seeing a port that
+  // hasn't been granted to this site yet needs asking for it — a direct click is what makes that chooser
+  // dialog allowed to open at all (see requestSerialPortAccess in serial-transport.ts).
+  function rescan() {
+    setScanning(true);
+    setScanError("");
+    requestSerialPortAccess()
+      .then((found) => {
+        setPorts(found);
+      })
+      .catch((error: unknown) => {
+        setScanError(error instanceof Error ? error.message : t("transport.listFailed"));
+      })
+      .finally(() => {
+        setScanning(false);
+      });
+  }
 
   return (
     <>
@@ -65,7 +89,7 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
         type="button"
         onClick={() => {
           setOpen(true);
-          if (hub.productType === "relay8") scanPorts();
+          if (serialAvailable) listPorts();
         }}
         className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/70"
         aria-label={t("transport.title")}
@@ -112,13 +136,13 @@ export function TransportPicker({ hub }: { hub: PhysicalDevice }) {
             })}
           </div>
 
-          {hub.productType === "relay8" && (
+          {serialAvailable && (
             <div className="flex flex-col gap-2 border-t border-border px-4 py-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">{t("transport.comPort")}</span>
                 <button
                   type="button"
-                  onClick={scanPorts}
+                  onClick={rescan}
                   disabled={scanning}
                   className="flex items-center gap-1 text-xs font-medium text-primary disabled:opacity-50"
                 >

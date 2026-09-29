@@ -1,6 +1,6 @@
 # Bản web
 
-Cùng một mã nguồn chạy được trong app cài đặt (Tauri) và trong trình duyệt. Bản web **chỉ điều khiển qua server (MQTT)**: không có Bluetooth, RS485, deep link, push.
+Cùng một mã nguồn chạy được trong app cài đặt (Tauri) và trong trình duyệt. Trình duyệt hỗ trợ Web Bluetooth (Chrome/Edge, desktop và Android) và Web Serial (Chrome/Edge, chỉ desktop) — xem [BLE-SERIAL-WEB.md](BLE-SERIAL-WEB.md); trình duyệt nào không hỗ trợ thì tự động chỉ còn MQTT. Deep link và push (FCM) thì chỉ có ở app.
 
 ## Build và triển khai
 ```
@@ -22,10 +22,10 @@ Nút "Continue with Google" chuyển cả trang tới `<API>/oauth2/authorizatio
 |---|---|---|
 | Gọi API | Tauri HTTP (không CORS) | `fetch` (cần CORS) |
 | Luồng thời gian thực (SSE) | Rust | `fetch` streaming (`src/lib/sse.ts`), tự nối lại |
-| Bluetooth / RS485 | có | không; chọn "phương thức kết nối" bị ẩn |
-| Ghép nối hub/module mới | có | không (hiện thông báo "cần dùng ứng dụng"); thêm chức năng cho hub đã có thì được |
+| Bluetooth / RS485 | có | có, nếu trình duyệt hỗ trợ (Chrome/Edge) — xem [BLE-SERIAL-WEB.md](BLE-SERIAL-WEB.md) |
+| Ghép nối hub/module mới | có | có, nếu trình duyệt hỗ trợ Web Bluetooth; ngược lại hiện thông báo "trình duyệt này không ghép nối được" |
 | Push (FCM), deep link | có | không |
-| Hàng đợi đồng bộ offline | có | có (localStorage), nhưng không có đường BLE/RS485 để điều khiển khi mất mạng |
+| Hàng đợi đồng bộ offline | có | có (localStorage); đường BLE/RS485 để điều khiển khi mất mạng phụ thuộc trình duyệt có hỗ trợ hay không |
 
 `src/lib/platform.ts` (`runsInApp()` / `useRunsInApp()`) là chỗ duy nhất để hỏi "đang ở app hay web". Mã cần phần native phải hỏi ở đó trước.
 

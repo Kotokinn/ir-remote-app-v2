@@ -12,8 +12,10 @@
 //    provisionWifi), so we never wait for a command response over BLE.
 import { sendString } from "@mnlphlp/plugin-blec";
 import { t } from "@/lib/i18n";
+import { runsInApp } from "@/lib/platform";
 import { useConnectionStore } from "@/lib/store/connection-store";
 import { commandRequestTopic } from "@/lib/device/device-profile";
+import { writeString as webWriteString } from "@/lib/device/web-bluetooth";
 import {
   HUB_CHARACTERISTIC_UUID,
   HUB_SERVICE_UUID,
@@ -50,6 +52,18 @@ async function ensureConnected(deviceId: string): Promise<void> {
     setConnected(null);
   }
 
+  if (!runsInApp()) {
+    // No fresh chooser dialog here — a command can fire long after whatever click last granted this
+    // device, and Web Bluetooth's requestDevice() needs one (see web-bluetooth.ts). connectToHub()
+    // reconnects silently if the browser still knows this device; otherwise it throws, which is the
+    // honest outcome — the user has to pick it again (e.g. from the transport picker) first.
+    await connectToHub(deviceId, () => {
+      if (connectedDeviceId === deviceId) setConnected(null);
+    });
+    setConnected(deviceId);
+    return;
+  }
+
   // The hub advertises its deviceId as its BLE name.
   const hubs = await scanForHubs(SCAN_MS);
   const hub = hubs.find((candidate) => candidate.name === deviceId);
@@ -73,7 +87,12 @@ export function sendCommandOverBle(
       await ensureConnected(deviceId);
       const topic = commandRequestTopic(deviceId, newRequestId());
       const payload = JSON.stringify({ method, params });
-      await sendString(HUB_CHARACTERISTIC_UUID, `${topic}|${payload}`, "withoutResponse", HUB_SERVICE_UUID);
+      const frame = `${topic}|${payload}`;
+      if (runsInApp()) {
+        await sendString(HUB_CHARACTERISTIC_UUID, frame, "withoutResponse", HUB_SERVICE_UUID);
+      } else {
+        await webWriteString(frame);
+      }
     };
 
     try {

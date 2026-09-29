@@ -246,8 +246,8 @@
     },
     "giveName": "Give it a name",
     "finish": "Finish",
-    "webPairingTitle": "Pairing needs the app",
-    "webPairingBody": "Adding a new hub or relay module needs Bluetooth, which a browser page can't use here. Pair it in the Android or desktop app — afterwards you can control it from this page too."
+    "webPairingTitle": "Bluetooth pairing isn't available here",
+    "webPairingBody": "This browser can't pair over Bluetooth (Chrome or Edge can). Use one of those, or the Android/desktop app — afterwards you can control it from this page too."
   },
   "pairing": {
     "product": {
@@ -277,7 +277,9 @@
     "claimingHint": "This can take up to 20 seconds while the device joins Wi-Fi and MQTT.",
     "failed": "Pairing failed",
     "tryAgain": "Try again",
-    "connectedName": "Connected! Give it a name"
+    "connectedName": "Connected! Give it a name",
+    "webSelectTitle": "Select your device",
+    "webSelectButton": "Choose a Bluetooth device"
   },
   "errors": {
     "alarmNotPaired": "This hub isn't paired over the network yet, so the alarm wasn't sent to it.",
@@ -289,7 +291,13 @@
     "googleCancelled": "Google sign-in was cancelled",
     "requestFailed": "Request failed with status {{status}}",
     "bleServices": "Failed to discover BLE services: {{services}}",
-    "notInBrowser": "This connection method needs the app: a browser can only reach the device through the server."
+    "webBluetoothUnsupported": "This browser doesn't support Bluetooth (try Chrome or Edge).",
+    "webBluetoothNotGranted": "{{name}} hasn't been connected over Bluetooth in this browser yet — open its connection settings to pick it.",
+    "webBluetoothNotConnected": "Not connected over Bluetooth.",
+    "webSerialUnsupported": "This browser doesn't support serial ports (try Chrome or Edge on a computer).",
+    "serialPortGone": "Port {{id}} is no longer available — pick it again.",
+    "serialNoResponse": "No response within {{timeoutMs}}ms.",
+    "serialOpenFailed": "Couldn't open {{port}}: {{error}}"
   },
   "relaySetup": {
     "defaultName": "Relay {{n}}",

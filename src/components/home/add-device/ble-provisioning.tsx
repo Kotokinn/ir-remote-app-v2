@@ -9,6 +9,7 @@ import type { TKey } from "@/lib/i18n";
 import { errorMessage as describeApiError } from "@/lib/i18n/errors";
 import { ApiError } from "@/lib/api/auth";
 import { startClaim } from "@/lib/api/mqtt";
+import { useRunsInApp } from "@/lib/platform";
 import {
   connectToHub,
   describeBleError,
@@ -37,6 +38,7 @@ export function BleProvisioning({
   onComplete: (physicalDevice: PhysicalDevice) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const inApp = useRunsInApp();
   const addPhysicalDevice = useHubsStore((s) => s.addPhysicalDevice);
   const [step, setStep] = useState<Step>("scanning");
   const [found, setFound] = useState<ScannedHub[]>([]);
@@ -63,7 +65,9 @@ export function BleProvisioning({
   const Icon = product === "hub-ir" ? Radio : Zap;
 
   useEffect(() => {
-    if (step !== "scanning") return;
+    // The app can scan silently and list every hub it hears; the browser can't (see selectWebDevice
+    // below) — nothing to auto-run here on the web, so wait for that click instead.
+    if (step !== "scanning" || !inApp) return;
     let cancelled = false;
     scanForHubs(SCAN_TIMEOUT_MS)
       .then((devices) => {
@@ -79,7 +83,7 @@ export function BleProvisioning({
     return () => {
       cancelled = true;
     };
-  }, [step]);
+  }, [step, inApp]);
 
   function pick(device: ScannedHub) {
     setPicked(device);
@@ -92,6 +96,24 @@ export function BleProvisioning({
       })
       .catch((error: unknown) => {
         setErrorMessage(describeBleError(error, t("pairing.connectFailed")));
+        setStep("error");
+      });
+  }
+
+  /**
+   * The web's whole "scan" step: Web Bluetooth's device chooser is scan-and-pick in one native dialog
+   * (there is no live list-with-RSSI API to show our own), so this both stands in for the "pick" screen
+   * and must run directly from this button's click — not from an effect, not after an earlier `await` —
+   * or the browser refuses to open it at all.
+   */
+  function selectWebDevice() {
+    scanForHubs(SCAN_TIMEOUT_MS)
+      .then((devices) => {
+        // Exactly one — the browser's own chooser already did the picking (see scanForHubs on the web).
+        pick(devices[0]);
+      })
+      .catch((error: unknown) => {
+        setErrorMessage(describeBleError(error, t("pairing.scanFailed")));
         setStep("error");
       });
   }
@@ -156,6 +178,24 @@ export function BleProvisioning({
   }
 
   if (step === "scanning") {
+    if (!inApp) {
+      return (
+        <div className="flex flex-col items-center gap-4 pt-10 text-center">
+          <Bluetooth className="size-10 text-primary" />
+          <p className="text-sm font-medium">{t("pairing.webSelectTitle")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("pairing.scanningHint", { product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(i18n.language) })}
+          </p>
+          <button
+            type="button"
+            onClick={selectWebDevice}
+            className="mt-2 h-12 w-full rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
+          >
+            {t("pairing.webSelectButton")}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Bluetooth className="size-10 animate-pulse text-primary" />

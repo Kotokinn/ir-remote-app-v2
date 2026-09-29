@@ -1,7 +1,10 @@
 // Single entry point for sending a command to a device: picks MQTT, BLE, or RS485.
-// UI code calls sendDeviceCommand(deviceId, method, params) and never cares which path is used.
+// UI code calls sendDeviceCommand(deviceId, method, params) and never cares which path is used — including
+// which platform it's running on: BLE and RS485 have browser implementations too (Web Bluetooth / Web
+// Serial, gated on real browser support — see ble-transport.ts / serial-transport.ts), so the routing
+// below is the same on the web as in the app. Where a browser genuinely can't (unsupported, device never
+// granted, no port assigned), the attempt just fails with a normal, honest error from that transport.
 import { t } from "@/lib/i18n";
-import { runsInApp } from "@/lib/platform";
 import { sendCommand as sendCommandOverMqtt } from "@/lib/api/mqtt";
 import { sendCommandOverBle } from "@/lib/device/ble-transport";
 import { sendCommandOverSerial } from "@/lib/device/serial-transport";
@@ -102,13 +105,6 @@ export async function sendDeviceCommand(
   const preferred = hub?.preferredTransport ?? "auto";
 
   try {
-    if (!runsInApp()) {
-      // A browser has no Bluetooth link or serial port to use: everything goes through the server (MQTT).
-      if (preferred === "ble" || preferred === "rs485") throw new Error(t("errors.notInBrowser"));
-      await sendCommandOverMqtt(deviceId, method, params);
-      recordCommand(deviceId, { route: "mqtt", ok: true, at: Date.now() });
-      return "mqtt";
-    }
     const route =
       preferred === "auto"
         ? await routeAuto(deviceId, hub?.serialPort, method, params)

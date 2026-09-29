@@ -5,13 +5,11 @@ const sendCommandOverMqtt = vi.hoisted(() => vi.fn());
 const sendCommandOverBle = vi.hoisted(() => vi.fn());
 const sendCommandOverSerial = vi.hoisted(() => vi.fn());
 const mqttHealth = vi.hoisted(() => vi.fn((): "alive" | "silent" | "unknown" => "alive"));
-const inApp = vi.hoisted(() => ({ value: true }));
 
 vi.mock("@/lib/api/mqtt", () => ({ sendCommand: sendCommandOverMqtt }));
 vi.mock("@/lib/device/ble-transport", () => ({ sendCommandOverBle }));
 vi.mock("@/lib/device/serial-transport", () => ({ sendCommandOverSerial }));
 vi.mock("@/lib/store/device-state-store", () => ({ mqttHealth }));
-vi.mock("@/lib/platform", () => ({ runsInApp: () => inApp.value }));
 
 import { useConnectionStore } from "@/lib/store/connection-store";
 import { useHubsStore, type PhysicalDevice } from "@/lib/store/hubs-store";
@@ -40,7 +38,6 @@ beforeEach(() => {
   sendCommandOverBle.mockReset().mockResolvedValue(undefined);
   sendCommandOverSerial.mockReset().mockResolvedValue(undefined);
   mqttHealth.mockReset().mockReturnValue("alive");
-  inApp.value = true;
   useHubsStore.setState({ physicalDevices: [] });
   useConnectionStore.setState({ lastCommand: {}, bleDeviceId: null });
 });
@@ -164,36 +161,10 @@ describe("sendDeviceCommand: recordCommand outcome", () => {
   });
 });
 
-describe("sendDeviceCommand: in a browser", () => {
-  beforeEach(() => {
-    inApp.value = false;
-  });
-
-  it("always goes over MQTT, even with a serial port assigned or the hub looking silent", async () => {
-    registerHub({ serialPort: "COM3" });
-    mqttHealth.mockReturnValue("silent");
-
-    const route = await sendDeviceCommand(DEVICE_ID, "getState");
-
-    expect(route).toBe("mqtt");
-    expect(sendCommandOverSerial).not.toHaveBeenCalled();
-    expect(sendCommandOverBle).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().lastCommand[DEVICE_ID]).toMatchObject({ route: "mqtt", ok: true });
-  });
-
-  it("refuses a hub pinned to Bluetooth or RS485 instead of silently using another path", async () => {
-    registerHub({ preferredTransport: "ble" });
-
-    await expect(sendDeviceCommand(DEVICE_ID, "getState")).rejects.toThrow(/app/i);
-
-    expect(sendCommandOverMqtt).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().lastCommand[DEVICE_ID]).toMatchObject({ route: null, ok: false });
-  });
-
-  it("reports an MQTT failure as a failure (there is no fallback to fall back to)", async () => {
-    registerHub();
-    sendCommandOverMqtt.mockRejectedValue(new Error("gateway down"));
-
-    await expect(sendDeviceCommand(DEVICE_ID, "getState")).rejects.toThrow("gateway down");
-  });
-});
+// device-commands.ts itself has no notion of "app" vs "browser" — BLE and RS485 have browser
+// implementations too (Web Bluetooth / Web Serial, see ble-transport.ts / serial-transport.ts), so
+// there is nothing platform-specific left to test at this layer: the "auto mode" and "manual pin"
+// suites above already exercise the exact same routing regardless of where it runs. What a browser
+// can't actually do (unsupported API, a device never granted, no port assigned) surfaces as a normal
+// rejection from sendCommandOverBle/sendCommandOverSerial themselves — see web-bluetooth.test.ts and
+// web-serial.test.ts.
