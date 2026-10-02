@@ -5,6 +5,7 @@
 // after connecting (readDeviceId() below), not from the scan result's name.
 
 import {
+  checkPermissions,
   connect,
   disconnect,
   getScanningUpdates,
@@ -79,6 +80,15 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
   if (!runsInApp()) {
     const hub = await requestHub();
     return [{ ...hub, rssi: 0 }];
+  }
+
+  // Declaring BLUETOOTH_SCAN/CONNECT in AndroidManifest.xml isn't enough on its own — Android
+  // still needs the user to tap "Allow" at runtime (API 23+ dangerous-permission model). Without
+  // this, every scan/connect fails with btleplug's "Missing permissions", every single time, with
+  // no prompt ever shown. askIfDenied=true shows the system dialog on the first call; a no-op if
+  // already granted. No-op on desktop (Windows/macOS/Linux don't have this permission model).
+  if (!(await checkPermissions(true))) {
+    throw new Error(t("errors.bluetoothPermissionDenied"));
   }
 
   const found = new Map<string, ScannedHub>();

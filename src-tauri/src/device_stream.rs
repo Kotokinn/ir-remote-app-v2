@@ -55,19 +55,25 @@ fn spawn_stream(
 ) -> Result<JoinHandle<()>, String> {
     let client = reqwest::Client::new();
     let mut event_source = open_event_source(&client, &url, &token)?;
+    println!("[device_stream] spawning for {event_name} -> {url}");
 
     Ok(tauri::async_runtime::spawn(async move {
         loop {
             let event = match tokio::time::timeout(STREAM_IDLE_TIMEOUT, event_source.next()).await {
                 Ok(Some(event)) => event,
-                Ok(None) => break,
+                Ok(None) => {
+                    println!("[device_stream] {event_name}: iterator ended");
+                    break;
+                }
                 Err(_elapsed) => {
                     // Not even a ping in STREAM_IDLE_TIMEOUT - most likely a socket left stranded by
                     // a network switch. Don't wait on it any longer; open a new one now.
+                    println!("[device_stream] {event_name}: idle for {STREAM_IDLE_TIMEOUT:?}, reconnecting");
                     event_source.close();
                     event_source = match open_event_source(&client, &url, &token) {
                         Ok(source) => source,
                         Err(err) => {
+                            println!("[device_stream] {event_name}: reconnect failed: {err}");
                             let _ = app.emit(
                                 &event_name,
                                 DeviceEventPayload { event: "error".to_string(), data: err },
@@ -82,6 +88,7 @@ fn spawn_stream(
             match event {
                 // Tell the frontend the stream is (re)connected so it can clear a previous error.
                 Ok(Event::Open) => {
+                    println!("[device_stream] {event_name}: open");
                     let _ = app.emit(
                         &event_name,
                         DeviceEventPayload { event: "open".to_string(), data: "{}".to_string() },
@@ -94,10 +101,12 @@ fn spawn_stream(
                     );
                 }
                 Err(reqwest_eventsource::Error::StreamEnded) => {
+                    println!("[device_stream] {event_name}: stream ended");
                     event_source.close();
                     break;
                 }
                 Err(err) => {
+                    println!("[device_stream] {event_name}: error: {err}");
                     let _ = app.emit(
                         &event_name,
                         DeviceEventPayload { event: "error".to_string(), data: err.to_string() },

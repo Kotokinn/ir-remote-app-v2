@@ -291,6 +291,7 @@
     "alarmUnreachable": "Couldn't reach {{hub}}. The alarm may not ring as set.",
     "scheduleSyncFailed": "Saved, but couldn't send it to: {{hubs}}. Check the hub is online or nearby, then save again.",
     "bleNotFound": "Device {{id}} not found over Bluetooth (out of range?)",
+    "bluetoothPermissionDenied": "Bluetooth permission denied — allow it for this app in system settings to pair or control devices over Bluetooth.",
     "noComPort": "No COM port assigned to this device yet — set one in the hub's settings.",
     "googleTimeout": "Google sign-in timed out",
     "googleCancelled": "Google sign-in was cancelled",

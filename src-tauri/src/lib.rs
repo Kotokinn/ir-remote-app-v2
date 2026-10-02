@@ -104,7 +104,7 @@ fn render_callback_page(has_error: bool) -> String {
     )
   };
 
-  OAUTH_CALLBACK_TEMPLATE
+  OAUTH_CALLBACK_TEMPLATEWWWW 
     .replace("__STATE__", state)
     .replace("__TITLE__", title)
     .replace("__MESSAGE__", message)

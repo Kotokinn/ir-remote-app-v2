@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-nextjs-template",
+  "productName": "Smart Control",
   "version": "0.1.0",
   "identifier": "com.vda.smarthome",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-nextjs-template",
+        "title": "Smart Control",
         "width": 800,
         "height": 600,
         "resizable": true,
@@ -25,9 +25,18 @@
   },
   "plugins": {
     "deep-link": {
-      "mobile": [{ "scheme": ["smarthome"], "appLink": false }],
+      "mobile": [
+        {
+          "scheme": [
+            "smarthome"
+          ],
+          "appLink": false
+        }
+      ],
       "desktop": {
-        "schemes": ["smarthome"]
+        "schemes": [
+          "smarthome"
+        ]
       }
     }
   },

@@ -283,6 +283,7 @@
     "alarmUnreachable": "Không kết nối được {{hub}}. Báo thức có thể không đổ chuông như đã đặt.",
     "scheduleSyncFailed": "Đã lưu, nhưng không gửi được tới: {{hubs}}. Hãy kiểm tra hub đang trực tuyến hoặc ở gần, rồi lưu lại.",
     "bleNotFound": "Không tìm thấy thiết bị {{id}} qua Bluetooth (ngoài tầm phủ sóng?)",
+    "bluetoothPermissionDenied": "Ứng dụng chưa được cấp quyền Bluetooth — vào cài đặt hệ thống cấp quyền để ghép nối/điều khiển qua Bluetooth.",
     "noComPort": "Thiết bị này chưa được gán cổng COM — hãy chọn một cổng trong phần cài đặt của hub.",
     "googleTimeout": "Đăng nhập Google đã hết thời gian chờ",
     "googleCancelled": "Đăng nhập Google đã bị huỷ",

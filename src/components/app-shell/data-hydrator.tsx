@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  startDeviceStream,
+  stopDeviceStream,
+} from "@/lib/device/device-stream";
+import { registerForPush } from "@/lib/device/push";
+import {
+  startNotificationStream,
+  stopNotificationStream,
+} from "@/lib/notification-stream";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { useRoomsStore } from "@/lib/store/rooms-store";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
-import { useScenesStore } from "@/lib/store/scenes-store";
-import { useProfileStore } from "@/lib/store/profile-store";
-import { useSchedulesStore } from "@/lib/store/schedules-store";
 import { useNotificationsStore } from "@/lib/store/notifications-store";
-import { useOutboxStore } from "@/lib/sync/outbox-store";
+import { useProfileStore } from "@/lib/store/profile-store";
+import { useRoomsStore } from "@/lib/store/rooms-store";
+import { useScenesStore } from "@/lib/store/scenes-store";
+import { useSchedulesStore } from "@/lib/store/schedules-store";
 import { syncEngine } from "@/lib/sync";
-import { startDeviceStream, stopDeviceStream } from "@/lib/device/device-stream";
-import { registerForPush } from "@/lib/device/push";
-import { startNotificationStream, stopNotificationStream } from "@/lib/notification-stream";
+import { useOutboxStore } from "@/lib/sync/outbox-store";
 
 export function DataHydrator() {
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -104,12 +110,17 @@ export function DataHydrator() {
   // Live device state over SSE (handled in Rust). Besides showing state, this is what tells
   // sendDeviceCommand whether MQTT is still reaching the device or BLE fallback is needed.
   // accessToken is a dependency so streams restart with the refreshed token (Rust captures it
-  // at start).
+  // at start). Keyed on the joined deviceId set, not the physicalDevices array reference itself —
+  // that reference changes (new array from the store) on every hub field update (name, online,
+  // preferredTransport...), which would otherwise restart every stream for no reason each time.
+  const deviceIdsKey = physicalDevices
+    .map((device) => device.deviceId)
+    .filter((id): id is string => Boolean(id))
+    .join(",");
+
   useEffect(() => {
-    if (!authHydrated || !accessToken) return;
-    const deviceIds = physicalDevices
-      .map((device) => device.deviceId)
-      .filter((id): id is string => Boolean(id));
+    if (!authHydrated || !accessToken || !deviceIdsKey) return;
+    const deviceIds = deviceIdsKey.split(",");
     for (const deviceId of deviceIds) {
       startDeviceStream(deviceId).catch((error: unknown) => {
         console.error(`[device-stream] failed to start for ${deviceId}`, error);
@@ -120,7 +131,7 @@ export function DataHydrator() {
         stopDeviceStream(deviceId).catch(() => undefined);
       }
     };
-  }, [authHydrated, accessToken, physicalDevices]);
+  }, [authHydrated, accessToken, deviceIdsKey]);
 
   // Force both live streams to reconnect right away on a clear "network's probably back" signal
   // (OS reports online, app returns to the foreground) instead of waiting on the Rust-side idle
@@ -129,9 +140,7 @@ export function DataHydrator() {
   // startNotificationStream already stop-then-start, so calling them again here is always safe.
   useEffect(() => {
     if (!authHydrated || !accessToken) return;
-    const deviceIds = physicalDevices
-      .map((device) => device.deviceId)
-      .filter((id): id is string => Boolean(id));
+    const deviceIds = deviceIdsKey ? deviceIdsKey.split(",") : [];
 
     function reconnect() {
       startNotificationStream().catch(() => undefined);
@@ -151,7 +160,7 @@ export function DataHydrator() {
       window.removeEventListener("focus", reconnect);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [authHydrated, accessToken, physicalDevices]);
+  }, [authHydrated, accessToken, deviceIdsKey]);
 
   return null;
 }
