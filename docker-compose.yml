@@ -1,0 +1,14 @@
+# Run: docker compose --env-file .env.local up --build
+# (.env.local already has real NEXT_PUBLIC_API_URL / NEXT_PUBLIC_GOOGLE_CLIENT_ID values — Compose's
+# default .env is a different, separate file, so it has to be pointed at explicitly like this.)
+# Port 3000 matches the origin the services repo's own docker-compose.yml already whitelists in
+# GATEWAY_CORS_ALLOWED_ORIGINS / AUTH_WEB_RETURN_ORIGINS for local dev (see docs/WEB.md).
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+    ports:
+      - "3000:80"
