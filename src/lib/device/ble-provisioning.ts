@@ -1,21 +1,40 @@
 // Real BLE pairing per docs/MQTT_API.md "BLE chi tiết": one characteristic used for both
-// write and notify, frame format `<topic>|<payload_json>` as plain UTF-8 text. The device's
-// advertised name IS its real deviceId (12 hex from eFuse MAC) — that's how we learn the
-// deviceId to hand off to mqtt-service's claim flow afterward.
-import { t } from "@/lib/i18n";
-import { connect, disconnect, getScanningUpdates, listServices, sendString, startScan, subscribeString, unsubscribe } from "@mnlphlp/plugin-blec";
-import { HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID } from "@/lib/device/ble-constants";
-import { runsInApp } from "@/lib/platform";
+// write and notify, frame format `<topic>|<payload_json>` as plain UTF-8 text. The advertised
+// name is just a product label (e.g. "SmartIrHub", shared by every unit of that product) — the
+// real deviceId (12 hex from eFuse MAC) is read from the characteristic's initial value right
+// after connecting (readDeviceId() below), not from the scan result's name.
+
 import {
+  connect,
+  disconnect,
+  getScanningUpdates,
+  listServices,
+  readString,
+  sendString,
+  startScan,
+  subscribeString,
+  unsubscribe,
+} from "@mnlphlp/plugin-blec";
+import {
+  HUB_CHARACTERISTIC_UUID,
+  HUB_SERVICE_UUID,
+} from "@/lib/device/ble-constants";
+import {
+  requestHub,
   connect as webConnect,
   disconnect as webDisconnect,
-  requestHub,
+  readString as webReadString,
   subscribeString as webSubscribeString,
   unsubscribeString as webUnsubscribeString,
   writeString as webWriteString,
 } from "@/lib/device/web-bluetooth";
+import { t } from "@/lib/i18n";
+import { runsInApp } from "@/lib/platform";
 
-export { HUB_SERVICE_UUID, HUB_CHARACTERISTIC_UUID } from "@/lib/device/ble-constants";
+export {
+  HUB_CHARACTERISTIC_UUID,
+  HUB_SERVICE_UUID,
+} from "@/lib/device/ble-constants";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,7 +63,8 @@ export function describeBleError(error: unknown, fallback: string): string {
 
 export interface ScannedHub {
   address: string;
-  /** Also the device's real deviceId once connected — see docs/MQTT_API.md "Định danh thiết bị". */
+  /** Just the product label now (e.g. "SmartIrHub") — same for every unit; not a deviceId. Call
+   * readDeviceId() after connecting for the real one. See docs/MQTT_API.md "BLE chi tiết". */
   name: string;
   rssi: number;
 }
@@ -79,8 +99,17 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
 
   await startScan((devices) => {
     for (const device of devices) {
-      if (!device.services.some((uuid) => uuid.toLowerCase() === HUB_SERVICE_UUID.toLowerCase())) continue;
-      found.set(device.address, { address: device.address, name: device.name, rssi: device.rssi });
+      if (
+        !device.services.some(
+          (uuid) => uuid.toLowerCase() === HUB_SERVICE_UUID.toLowerCase(),
+        )
+      )
+        continue;
+      found.set(device.address, {
+        address: device.address,
+        name: device.name,
+        rssi: device.rssi,
+      });
     }
   }, timeoutMs);
 
@@ -91,7 +120,10 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
   return Array.from(found.values());
 }
 
-export async function connectToHub(address: string, onDisconnect?: () => void): Promise<void> {
+export async function connectToHub(
+  address: string,
+  onDisconnect?: () => void,
+): Promise<void> {
   if (!runsInApp()) {
     await webConnect(address, onDisconnect);
     return;
@@ -118,6 +150,76 @@ export async function connectToHub(address: string, onDisconnect?: () => void): 
     throw new Error(t("errors.bleServices", { services }));
   }
   await sleep(200);
+}
+
+/**
+ * Reads the device's real deviceId (eFuse MAC) via GATT characteristic read, straight off the
+ * `device|{"deviceId":"..."}` value the firmware sets as soon as BLE starts (BLEMQTT::setDeviceId,
+ * see main.cpp setup()) — before any other frame is published, so this is safe right after connect.
+ */
+// WinRT (Windows BLE backend) can throw a transient E_ABORT on the first GATT operation right after
+// connect — already true for connect()/subscribe above; a bare read is just as susceptible. One retry.
+async function readCharacteristicWithRetry(): Promise<string> {
+  try {
+    return await readString(HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID);
+  } catch (error) {
+    console.warn("[ble] readDeviceId failed, retrying once", error);
+    await sleep(300);
+    return await readString(HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID);
+  }
+}
+
+/**
+ * Every non-claim topic shares the same shape mqtt-service's own DeviceTopics.parse() expects:
+ * v1/tenants/{tenant}/devices/{profile}/{deviceId}/{telemetry|attributes|state|events|commands/...}.
+ * Claim is the one exception (no tenant prefix): devices/{profile}/{deviceId}/claim.
+ */
+function deviceIdFromTopic(topic: string): string | undefined {
+  const segments = topic.split("/");
+  if (
+    segments.length >= 6 &&
+    segments[0] === "v1" &&
+    segments[1] === "tenants" &&
+    segments[3] === "devices"
+  ) {
+    return segments[5];
+  }
+  if (
+    segments.length === 4 &&
+    segments[0] === "devices" &&
+    segments[3] === "claim"
+  ) {
+    return segments[2];
+  }
+  return undefined;
+}
+
+export async function readDeviceId(): Promise<string> {
+  const frame = runsInApp()
+    ? await readCharacteristicWithRetry()
+    : await webReadString();
+  const separatorIndex = frame.indexOf("|");
+  if (separatorIndex < 0) {
+    throw new Error(t("errors.bleDeviceIdMissing"));
+  }
+  const topic = frame.slice(0, separatorIndex);
+
+  if (topic === "device") {
+    const body = JSON.parse(frame.slice(separatorIndex + 1)) as {
+      deviceId?: string;
+    };
+    if (body.deviceId) return body.deviceId;
+  } else {
+    // Re-pairing an already-claimed device races its own background reconnect: as soon as
+    // WiFi/MQTT comes back it republishes telemetry/attributes/state/claim — over BLE too, since
+    // the characteristic is shared for every outgoing frame (BLEMQTT.h) — overwriting the
+    // "device|..." value before this read can land. Every one of those topics still carries the
+    // deviceId as a path segment, so pull it from there instead of failing outright.
+    const fromTopic = deviceIdFromTopic(topic);
+    if (fromTopic) return fromTopic;
+  }
+
+  throw new Error(t("errors.bleDeviceIdMissing"));
 }
 
 export async function disconnectFromHub(): Promise<void> {
@@ -162,7 +264,7 @@ async function raceForAck(
   subscribe: (onFrame: (data: string) => void) => Promise<void>,
   send: (frame: string) => Promise<void>,
   unsub: () => Promise<void>,
-  frame: string
+  frame: string,
 ): Promise<ProvisionResult> {
   const receivedFrames: string[] = [];
   let resolveAck: (ack: InitAck) => void = () => undefined;
@@ -184,14 +286,17 @@ async function raceForAck(
 
   await send(frame);
 
-  const ack = await Promise.race([ackPromise, sleep(ackTimeoutMs).then(() => undefined)]);
+  const ack = await Promise.race([
+    ackPromise,
+    sleep(ackTimeoutMs).then(() => undefined),
+  ]);
   // The device reboots right after acking, so the link may already be gone — ignore failures.
   unsub().catch(() => undefined);
 
   if (!ack) {
     console.warn(
       `[ble] no init ACK within ${ackTimeoutMs}ms (received ${receivedFrames.length} notification frame(s)); ` +
-        "continuing — the claim step is the real success signal"
+        "continuing — the claim step is the real success signal",
     );
     return { acked: false };
   }
@@ -204,9 +309,13 @@ export async function provisionWifi(
   timeZone: string,
   // The device now test-connects to the WiFi (up to WIFI_CONNECT_TIMEOUT_MS = 20s) BEFORE it
   // replies, so the ACK legitimately takes that long on a wrong password.
-  ackTimeoutMs = 30000
+  ackTimeoutMs = 30000,
 ): Promise<ProvisionResult> {
-  const payload = JSON.stringify({ ssid, ssid_pass: ssidPassword, time_zone: timeZone });
+  const payload = JSON.stringify({
+    ssid,
+    ssid_pass: ssidPassword,
+    time_zone: timeZone,
+  });
   const frame = `init|${payload}`;
 
   if (!runsInApp()) {
@@ -215,7 +324,7 @@ export async function provisionWifi(
       (onFrame) => webSubscribeString(onFrame),
       (f) => webWriteString(f),
       () => webUnsubscribeString(),
-      frame
+      frame,
     );
   }
 
@@ -230,8 +339,14 @@ export async function provisionWifi(
     },
     // withoutResponse: WinRT's write-with-response completion path threw E_ABORT even though the
     // device received the full payload; the characteristic also advertises WRITE_NR.
-    (f) => sendString(HUB_CHARACTERISTIC_UUID, f, "withoutResponse", HUB_SERVICE_UUID),
+    (f) =>
+      sendString(
+        HUB_CHARACTERISTIC_UUID,
+        f,
+        "withoutResponse",
+        HUB_SERVICE_UUID,
+      ),
     () => unsubscribe(HUB_CHARACTERISTIC_UUID),
-    frame
+    frame,
   );
 }

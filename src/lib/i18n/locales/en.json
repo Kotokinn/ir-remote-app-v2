@@ -161,7 +161,12 @@
     "removeDescription_one": "This also removes {{count}} linked device. This can't be undone.",
     "removeDescription_other": "This also removes {{count}} linked devices. This can't be undone.",
     "unknown": "Unknown room",
-    "noChannels": "No channels configured."
+    "noChannels": "No channels configured.",
+    "deleteRoomAria": "Delete {{name}}",
+    "deleteRoomTitle": "Delete {{name}}?",
+    "deleteRoomDescriptionEmpty": "This can't be undone.",
+    "deleteRoomDescription_one": "{{count}} hub/device in this room won't be deleted — it just won't be grouped under a room anymore. This can't be undone.",
+    "deleteRoomDescription_other": "{{count}} hubs/devices in this room won't be deleted — they just won't be grouped under a room anymore. This can't be undone."
   },
   "addRoom": {
     "title": "Add a room",
@@ -291,6 +296,7 @@
     "googleCancelled": "Google sign-in was cancelled",
     "requestFailed": "Request failed with status {{status}}",
     "bleServices": "Failed to discover BLE services: {{services}}",
+    "bleDeviceIdMissing": "Couldn't read the device's ID over Bluetooth — try again.",
     "webBluetoothUnsupported": "This browser doesn't support Bluetooth (try Chrome or Edge).",
     "webBluetoothNotGranted": "{{name}} hasn't been connected over Bluetooth in this browser yet — open its connection settings to pick it.",
     "webBluetoothNotConnected": "Not connected over Bluetooth.",

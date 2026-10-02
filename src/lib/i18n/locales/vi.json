@@ -154,7 +154,11 @@
     "thisDevice": "thiết bị này",
     "removeDescription_other": "Thao tác này cũng xoá {{count}} thiết bị liên kết và không thể hoàn tác.",
     "unknown": "Phòng không xác định",
-    "noChannels": "Chưa cấu hình kênh nào."
+    "noChannels": "Chưa cấu hình kênh nào.",
+    "deleteRoomAria": "Xoá {{name}}",
+    "deleteRoomTitle": "Xoá {{name}}?",
+    "deleteRoomDescriptionEmpty": "Không thể hoàn tác.",
+    "deleteRoomDescription_other": "{{count}} hub/thiết bị trong phòng này sẽ không bị xoá — chỉ không còn gắn với phòng nào nữa. Không thể hoàn tác."
   },
   "addRoom": {
     "title": "Thêm phòng",
@@ -284,6 +288,7 @@
     "googleCancelled": "Đăng nhập Google đã bị huỷ",
     "requestFailed": "Yêu cầu thất bại với mã trạng thái {{status}}",
     "bleServices": "Không phát hiện được dịch vụ BLE: {{services}}",
+    "bleDeviceIdMissing": "Không đọc được ID thiết bị qua Bluetooth — thử lại.",
     "webBluetoothUnsupported": "Trình duyệt này không hỗ trợ Bluetooth (hãy thử Chrome hoặc Edge).",
     "webBluetoothNotGranted": "{{name}} chưa được kết nối qua Bluetooth trên trình duyệt này — hãy mở phần cài đặt kết nối để chọn lại.",
     "webBluetoothNotConnected": "Chưa kết nối qua Bluetooth.",

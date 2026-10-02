@@ -122,5 +122,36 @@ export function DataHydrator() {
     };
   }, [authHydrated, accessToken, physicalDevices]);
 
+  // Force both live streams to reconnect right away on a clear "network's probably back" signal
+  // (OS reports online, app returns to the foreground) instead of waiting on the Rust-side idle
+  // watchdog (device_stream.rs's STREAM_IDLE_TIMEOUT), which only exists as a fallback for a
+  // switch between two networks that never looked "offline" to the webview. startDeviceStream /
+  // startNotificationStream already stop-then-start, so calling them again here is always safe.
+  useEffect(() => {
+    if (!authHydrated || !accessToken) return;
+    const deviceIds = physicalDevices
+      .map((device) => device.deviceId)
+      .filter((id): id is string => Boolean(id));
+
+    function reconnect() {
+      startNotificationStream().catch(() => undefined);
+      for (const deviceId of deviceIds) {
+        startDeviceStream(deviceId).catch(() => undefined);
+      }
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") reconnect();
+    }
+
+    window.addEventListener("online", reconnect);
+    window.addEventListener("focus", reconnect);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", reconnect);
+      window.removeEventListener("focus", reconnect);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [authHydrated, accessToken, physicalDevices]);
+
   return null;
 }

@@ -1,29 +1,51 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getCategory, type Device } from "@/lib/mock-data";
-import { useDevicesStore } from "@/lib/store/devices-store";
-import { useRoomsStore } from "@/lib/store/rooms-store";
-import { canAddDevicesTo, mayConfigure, mayEdit } from "@/lib/sharing";
-import { useHubsStore, getPhysicalDevice, type PhysicalDevice } from "@/lib/store/hubs-store";
-import { cn } from "@/lib/utils";
+import {
+  AcControlPanel,
+  type AcState,
+  type SleepState,
+} from "@/components/devices/ac-control-panel";
+import {
+  AlarmControlPanel,
+  type AlarmState,
+} from "@/components/devices/alarm-control-panel";
 import { LightControlPanel } from "@/components/devices/light-control-panel";
-import { AcControlPanel, type AcState, type SleepState } from "@/components/devices/ac-control-panel";
 import { RemoteControlPanel } from "@/components/devices/remote-control-panel";
-import { AlarmControlPanel, type AlarmState } from "@/components/devices/alarm-control-panel";
-import { RgbControlPanel, type RgbState } from "@/components/devices/rgb-control-panel";
+import {
+  RgbControlPanel,
+  type RgbState,
+} from "@/components/devices/rgb-control-panel";
 import { ToggleDeviceRow } from "@/components/devices/toggle-device-row";
 import { ConfirmDialog } from "@/components/home/confirm-dialog";
-import { sendDeviceCommand } from "@/lib/device/device-commands";
-import { HubStatusDot, HubTemperatureReadout } from "@/components/home/hub-live-status";
-import { buildRgbCommands, buildSendAcCommand, buildSetSleepModeCommand } from "@/lib/device/commands";
-import { removeAlarmFromHub, syncAlarmToHub } from "@/lib/device/alarm-sync";
+import {
+  HubStatusDot,
+  HubTemperatureReadout,
+} from "@/components/home/hub-live-status";
 import { TransportPicker } from "@/components/home/transport-picker";
+import { removeAlarmFromHub, syncAlarmToHub } from "@/lib/device/alarm-sync";
+import {
+  buildRgbCommands,
+  buildSendAcCommand,
+  buildSetSleepModeCommand,
+} from "@/lib/device/commands";
+import { sendDeviceCommand } from "@/lib/device/device-commands";
+import { usePingHubsOnOpen } from "@/lib/device/presence-ping";
 import { useSyncRelayStatusOnOpen } from "@/lib/device/relay-status-sync";
+import { type Device, getCategory } from "@/lib/mock-data";
+import { canAddDevicesTo, mayConfigure, mayEdit } from "@/lib/sharing";
+import { useDevicesStore } from "@/lib/store/devices-store";
+import {
+  getPhysicalDevice,
+  type PhysicalDevice,
+  useHubsStore,
+} from "@/lib/store/hubs-store";
+import { useRoomsStore } from "@/lib/store/rooms-store";
+import { cn } from "@/lib/utils";
 
 // Physical relays are latching (ADW1212HL — audible click, real wear per toggle) and every flip is
 // a real MQTT publish; nothing currently stops a user from mashing a switch and firing one command
@@ -48,13 +70,23 @@ export function CategoryClient({
   const physicalDevices = useHubsStore((s) => s.physicalDevices);
   const rooms = useRoomsStore((s) => s.rooms);
   const devices = allDevices.filter(
-    (d) => (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId
+    (d) =>
+      (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId,
   );
   const [selectedId, setSelectedId] = useState(devices[0]?.id);
-  const [deleteTarget, setDeleteTarget] = useState<Device | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<Device | undefined>(
+    undefined,
+  );
   const [alarmSyncError, setAlarmSyncError] = useState<string | null>(null);
-  const pendingToggleSends = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; flush: () => void }>());
-  const [lockedToggleIds, setLockedToggleIds] = useState<Set<string>>(new Set());
+  const pendingToggleSends = useRef(
+    new Map<
+      string,
+      { timer: ReturnType<typeof setTimeout>; flush: () => void }
+    >(),
+  );
+  const [lockedToggleIds, setLockedToggleIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // A pending debounced toggle send would otherwise be silently dropped if the user navigates away
   // (e.g. taps a switch then immediately backs out) before the pause elapses — flush instead.
@@ -86,6 +118,7 @@ export function CategoryClient({
   })();
   const commonHub = hubsInView.length === 1 ? hubsInView[0] : undefined;
   const relayStatusSyncing = useSyncRelayStatusOnOpen(hubsInView);
+  usePingHubsOnOpen(hubsInView);
 
   // TransportPicker pins a hub's preferredTransport persistently (hubs-store, localStorage) — meant
   // for "always use RS485 for this hub", not "just testing BLE for a minute on this screen". Without
@@ -107,8 +140,13 @@ export function CategoryClient({
   if (!category) {
     return (
       <div className="flex flex-col items-center gap-3 px-4 pt-16 text-center">
-        <p className="text-sm text-muted-foreground">{t("category.notFound")}</p>
-        <Link href={`/home/room?id=${roomId}`} className="text-sm font-medium text-primary">
+        <p className="text-sm text-muted-foreground">
+          {t("category.notFound")}
+        </p>
+        <Link
+          href={`/home/room?id=${roomId}`}
+          className="text-sm font-medium text-primary"
+        >
           {t("common.back")}
         </Link>
       </div>
@@ -129,7 +167,11 @@ export function CategoryClient({
     void updateDevice(device.id, state);
     const deviceId = realDeviceIdFor(device);
     if (!deviceId || !device.brand) return;
-    sendDeviceCommand(deviceId, "sendAc", buildSendAcCommand(device.brand, state).params).catch((error: unknown) => {
+    sendDeviceCommand(
+      deviceId,
+      "sendAc",
+      buildSendAcCommand(device.brand, state).params,
+    ).catch((error: unknown) => {
       console.error("[ac] sendDeviceCommand failed", error);
     });
   }
@@ -143,11 +185,13 @@ export function CategoryClient({
     });
     const deviceId = realDeviceIdFor(device);
     if (!deviceId) return;
-    sendDeviceCommand(deviceId, "setSleepMode", buildSetSleepModeCommand(state).params).catch(
-      (error: unknown) => {
-        console.error("[ac] setSleepMode failed", error);
-      }
-    );
+    sendDeviceCommand(
+      deviceId,
+      "setSleepMode",
+      buildSetSleepModeCommand(state).params,
+    ).catch((error: unknown) => {
+      console.error("[ac] setSleepMode failed", error);
+    });
   }
 
   function handleToggleChange(device: Device, isOn: boolean) {
@@ -167,13 +211,17 @@ export function CategoryClient({
         next.delete(device.id);
         return next;
       });
-      sendDeviceCommand(deviceId, `setRelay${device.relayIndex}`, isOn).catch((error: unknown) => {
-        console.error("[toggle] setRelay failed", error);
-      });
+      sendDeviceCommand(deviceId, `setRelay${device.relayIndex}`, isOn).catch(
+        (error: unknown) => {
+          console.error("[toggle] setRelay failed", error);
+        },
+      );
     };
     const timer = setTimeout(flush, TOGGLE_SEND_DEBOUNCE_MS);
     pendingToggleSends.current.set(device.id, { timer, flush });
-    setLockedToggleIds((prev) => (prev.has(device.id) ? prev : new Set(prev).add(device.id)));
+    setLockedToggleIds((prev) =>
+      prev.has(device.id) ? prev : new Set(prev).add(device.id),
+    );
   }
 
   function handleAlarmChange(device: Device, state: AlarmState) {
@@ -194,9 +242,11 @@ export function CategoryClient({
     const deviceId = realDeviceIdFor(device);
     if (!deviceId) return;
     for (const command of buildRgbCommands(state)) {
-      sendDeviceCommand(deviceId, command.method, command.params).catch((error: unknown) => {
-        console.error("[rgb] sendDeviceCommand failed", error);
-      });
+      sendDeviceCommand(deviceId, command.method, command.params).catch(
+        (error: unknown) => {
+          console.error("[rgb] sendDeviceCommand failed", error);
+        },
+      );
     }
   }
 
@@ -213,7 +263,9 @@ export function CategoryClient({
         >
           <ChevronLeft className="size-5 rtl:rotate-180" />
         </button>
-        <h1 className="flex-1 truncate text-lg font-semibold">{t(category.nameKey)}</h1>
+        <h1 className="flex-1 truncate text-lg font-semibold">
+          {t(category.nameKey)}
+        </h1>
         {commonHub && <TransportPicker hub={commonHub} />}
         {canAddDevicesTo(roomId, rooms) && (
           <Link
@@ -245,7 +297,9 @@ export function CategoryClient({
           <span className="flex size-12 items-center justify-center rounded-full bg-accent text-primary">
             <CategoryIcon className="size-6" />
           </span>
-          <p className="text-sm font-medium">{t("category.emptyTitle", { category: t(category.nameKey) })}</p>
+          <p className="text-sm font-medium">
+            {t("category.emptyTitle", { category: t(category.nameKey) })}
+          </p>
           <p className="text-xs text-muted-foreground">
             {t("category.emptyHint")}
           </p>
@@ -296,7 +350,7 @@ export function CategoryClient({
                     "relative flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center transition-colors",
                     active
                       ? "bg-primary text-primary-foreground"
-                      : "bg-card text-muted-foreground ring-1 ring-border"
+                      : "bg-card text-muted-foreground ring-1 ring-border",
                   )}
                 >
                   {chipHub && (
@@ -339,7 +393,11 @@ export function CategoryClient({
                 sleepWakeTime={selectedDevice.sleepWakeTime}
                 sleepTargetTemp={selectedDevice.sleepTargetTemp}
                 hubName={hubNameFor(selectedDevice)}
-                currentTempSlot={<HubTemperatureReadout deviceId={realDeviceIdFor(selectedDevice)} />}
+                currentTempSlot={
+                  <HubTemperatureReadout
+                    deviceId={realDeviceIdFor(selectedDevice)}
+                  />
+                }
                 onChange={(state) => {
                   handleAcChange(selectedDevice, state);
                 }}
@@ -348,23 +406,25 @@ export function CategoryClient({
                 }}
               />
             )}
-            {(selectedDevice.kind === "remote" || selectedDevice.kind === "alarm") &&
+            {(selectedDevice.kind === "remote" ||
+              selectedDevice.kind === "alarm") &&
               !mayConfigure(selectedDevice) && (
                 <p className="rounded-xl bg-muted px-3 py-3 text-sm text-muted-foreground">
                   {t("category.controlOnly", { name: selectedDevice.name })}
                 </p>
               )}
-            {selectedDevice.kind === "remote" && mayConfigure(selectedDevice) && (
-              <RemoteControlPanel
-                key={selectedDevice.id}
-                name={selectedDevice.name}
-                buttons={selectedDevice.buttons ?? []}
-                hubName={hubNameFor(selectedDevice)}
-                onButtonsChange={(buttons) => {
-                  void updateDevice(selectedDevice.id, { buttons });
-                }}
-              />
-            )}
+            {selectedDevice.kind === "remote" &&
+              mayConfigure(selectedDevice) && (
+                <RemoteControlPanel
+                  key={selectedDevice.id}
+                  name={selectedDevice.name}
+                  buttons={selectedDevice.buttons ?? []}
+                  hubName={hubNameFor(selectedDevice)}
+                  onButtonsChange={(buttons) => {
+                    void updateDevice(selectedDevice.id, { buttons });
+                  }}
+                />
+              )}
             {selectedDevice.kind === "toggle" && (
               <div className="relative">
                 {relayStatusSyncing && (
@@ -401,26 +461,27 @@ export function CategoryClient({
                 }}
               />
             )}
-            {selectedDevice.kind === "alarm" && mayConfigure(selectedDevice) && (
-              <>
-                {alarmSyncError && (
-                  <p className="mb-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                    {alarmSyncError}
-                  </p>
-                )}
-                <AlarmControlPanel
-                  key={selectedDevice.id}
-                  name={selectedDevice.name}
-                  isOn={selectedDevice.isOn}
-                  alarmTime={selectedDevice.alarmTime}
-                  alarmDays={selectedDevice.alarmDays}
-                  hubName={hubNameFor(selectedDevice)}
-                  onChange={(state) => {
-                    handleAlarmChange(selectedDevice, state);
-                  }}
-                />
-              </>
-            )}
+            {selectedDevice.kind === "alarm" &&
+              mayConfigure(selectedDevice) && (
+                <>
+                  {alarmSyncError && (
+                    <p className="mb-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      {alarmSyncError}
+                    </p>
+                  )}
+                  <AlarmControlPanel
+                    key={selectedDevice.id}
+                    name={selectedDevice.name}
+                    isOn={selectedDevice.isOn}
+                    alarmTime={selectedDevice.alarmTime}
+                    alarmDays={selectedDevice.alarmDays}
+                    hubName={hubNameFor(selectedDevice)}
+                    onChange={(state) => {
+                      handleAlarmChange(selectedDevice, state);
+                    }}
+                  />
+                </>
+              )}
 
             {mayEdit(selectedDevice) && (
               <button
@@ -443,7 +504,9 @@ export function CategoryClient({
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(undefined);
         }}
-        title={t("room.removeTitle", { name: deleteTarget?.name ?? t("room.thisDevice") })}
+        title={t("room.removeTitle", {
+          name: deleteTarget?.name ?? t("room.thisDevice"),
+        })}
         description={t("common.cannotUndo")}
         onConfirm={() => {
           if (!deleteTarget) return;

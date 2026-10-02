@@ -12,7 +12,7 @@ export function BottomNav() {
   const { t } = useTranslation();
 
   return (
-    <nav className="flex shrink-0 items-center justify-between border-t border-border bg-card px-2 py-2 md:hidden">
+    <nav className="flex shrink-0 items-center justify-between border-t border-border bg-card px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
       {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (

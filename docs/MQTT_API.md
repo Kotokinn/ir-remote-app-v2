@@ -478,12 +478,15 @@ Thiết bị kiểm tra ThingsBoard mỗi 5 giờ (và ngay sau khi boot). Khi t
 
 | Thông tin | Giá trị |
 |---|---|
-| Tên thiết bị quảng bá (advertised name) | = `deviceId` (VD `A1B2C3D4E5F6`), set lúc `setup()` sau khi tính eFuse MAC |
+| Tên thiết bị quảng bá (advertised name) | = `DEVICE_PROFILE` (VD `SmartIrHub`) — **chỉ để hiển thị**, giống nhau ở mọi thiết bị cùng loại, không dùng làm deviceId |
 | Service UUID | `4fafc201-1fb5-459e-8fcc-c5c9c331914b` |
 | Characteristic UUID | `bd4fcc47-3393-40d5-966e-7d38db846eab` |
 | Characteristic properties | `READ`, `WRITE`, `WRITE NO RESPONSE`, `NOTIFY` |
 | Descriptor | CCCD chuẩn `0x2902` (ghi `0x0001` để bật notify) |
 | MTU thiết bị yêu cầu | 517 byte (thực tế phụ thuộc MTU hai bên thương lượng được) |
+| Scan response | Bật (`enableScanResponse(true)`) — gói ADV chính 31 byte đã gần đầy với Flags + Service UUID 128-bit, tên dễ không đủ chỗ nếu nhét chung |
+
+**deviceId thật** (eFuse MAC, duy nhất — cần cho `init`/claim) **không** nằm trong tên quảng bá. Ngay sau `begin()`, thiết bị set sẵn giá trị đầu tiên của characteristic thành frame `device|{"deviceId":"<MAC>"}` — app GATT **read** (không phải notify) characteristic này ngay sau khi connect, trước khi gửi/nhận bất kỳ frame nào khác, để lấy đúng deviceId trước khi `init`/claim (xem `lib/device/ble-provisioning.ts` hàm `readDeviceId()`).
 | Advertising interval | 0x20–0x40 slot (~12.5ms–40ms) |
 
 Chỉ **một** characteristic dùng chung cho cả gửi và nhận (không tách TX/RX riêng):
@@ -530,4 +533,6 @@ init|{"ssid":"Ten_WiFi","ssid_pass":"matkhau","time_zone":"Asia/Ho_Chi_Minh"}
 
 - Mọi payload JSON phải nhỏ hơn `MQTT_BUFFER_SIZE` (1024 byte).
 - `deviceId` cố định theo phần cứng (eFuse MAC), không đổi giữa các lần boot — dùng để build topic ở client.
-- Thông báo và xác nhận OTA đi qua `.../events` + `confirmOtaUpdate` (mục 9). Riêng việc dò/tải firmware từ ThingsBoard dùng HTTP (`POST /api/v1/provision`, `GET /api/v1/{token}/attributes`, `GET /api/v1/{token}/firmware`), xem code `provisionDeviceToken()`/`fetchLatestFirmwareInfo()`/`downloadAndApplyFirmware()` trong `src/main.cpp`.
+- Thông báo và xác nhận OTA đi qua `.../events` + `confirmOtaUpdate` (mục 9). Riêng việc dò/tải firmware từ ThingsBoard dùng HTTPS qua `TB_HTTP_HOST` (`POST /api/tb/provision`, `GET /api/tb/{token}/attributes`, `GET /api/tb/{token}/firmware`), xem code `provisionDeviceToken()`/`fetchLatestFirmwareInfo()`/`downloadAndApplyFirmware()` trong `src/main.cpp`. 3 request này dùng `WiFiClientSecure::setInsecure()` (bỏ xác thực chứng chỉ server) — cần thiết vì ESP32 không đủ heap để verify-full khi không pin CA cert thật; chấp nhận đánh đổi vì payload chỉ là provisioning token/firmware, không phải dữ liệu nhạy cảm.
+- `setInsecure()` vẫn không tránh được mbedTLS phải cấp phát heap để parse chứng chỉ/tính BIGNUM (RSA) lúc handshake. NimBLE chiếm khoảng 40KB heap khi đang chạy — đo thực tế có BLE thì chỉ còn ~58KB free/~50KB liền khối, không đủ (`BIGNUM - Memory allocation failed`); tắt hẳn BLE thì dư (~98KB).
+- Chỉ `downloadAndApplyFirmware()` tắt tạm BLE (`NimBLEDevice::deinit`) trước khi gọi HTTPS rồi bật lại ngay sau, và cũng chỉ khi không có client BLE nào đang kết nối (`bleTransport.isConnected() == false`). `provisionDeviceToken()`/`fetchLatestFirmwareInfo()` **không đụng BLE** — dù `isConnected()==false` cũng không đủ để tắt an toàn cho 2 hàm này: `provisionDeviceToken()` bị gọi lại mỗi 30 giây khi chưa có token và giữ BLE tắt suốt cả lúc gọi HTTPS (vài giây/lần chứ không phải tức thời), nên dễ trúng đúng lúc app đang **gửi yêu cầu kết nối** (`isConnected()` vẫn đọc `false` ở bước này — chỉ báo "đã kết nối xong", không báo "đang kết nối") — NimBLE bị deinit giữa lúc đó khiến yêu cầu bị hủy (`request canceled`), y hệt bug đã gặp hai lần. Vì vậy 2 hàm này thiếu heap thì cứ fail, tự retry ở lần sau; chỉ hàm tải firmware (hiếm, do app xác nhận, không lặp theo chu kỳ) mới đánh đổi tắt BLE.

@@ -9,7 +9,7 @@ import { SyncStatus } from "@/components/app-shell/sync-status";
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-dvh flex-col bg-background md:flex-row">
+    <div className="flex h-dvh flex-col bg-background pt-[env(safe-area-inset-top)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)] md:flex-row">
       <AuthGuard />
       <JoinLinkListener />
       <DataHydrator />

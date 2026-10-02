@@ -13,16 +13,23 @@
 //    picking it again in a chooser.
 //  - Support: Chrome/Edge desktop and Android only. No Firefox, no Safari/iOS. Check
 //    isWebBluetoothSupported() before offering this path in the UI.
-import { HUB_CHARACTERISTIC_UUID, HUB_SERVICE_UUID } from "@/lib/device/ble-constants";
+import {
+  HUB_CHARACTERISTIC_UUID,
+  HUB_SERVICE_UUID,
+} from "@/lib/device/ble-constants";
 import { t } from "@/lib/i18n";
 
 export function isWebBluetoothSupported(): boolean {
   return typeof navigator !== "undefined" && "bluetooth" in navigator;
 }
 
-/** Devices granted in this page session, by the name the hub advertises (== its deviceId once paired). */
+/** Devices granted in this page session, keyed by the name the hub advertises (just the shared product
+ * label now, e.g. "SmartIrHub" — not a deviceId; resolveDevice() falls back to matching by `.id`). */
 const knownDevices = new Map<string, BluetoothDevice>();
-let current: { device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic } | null = null;
+let current: {
+  device: BluetoothDevice;
+  characteristic: BluetoothRemoteGATTCharacteristic;
+} | null = null;
 let notifyHandler: ((data: string) => void) | null = null;
 
 function remember(device: BluetoothDevice): { address: string; name: string } {
@@ -33,7 +40,8 @@ function remember(device: BluetoothDevice): { address: string; name: string } {
 
 /** Opens the browser's own device chooser, filtered to hubs. Call this directly from a click handler. */
 export async function requestHub(): Promise<{ address: string; name: string }> {
-  if (!isWebBluetoothSupported()) throw new Error(t("errors.webBluetoothUnsupported"));
+  if (!isWebBluetoothSupported())
+    throw new Error(t("errors.webBluetoothUnsupported"));
   const device = await navigator.bluetooth.requestDevice({
     filters: [{ services: [HUB_SERVICE_UUID] }],
     optionalServices: [HUB_SERVICE_UUID],
@@ -45,11 +53,15 @@ export async function requestHub(): Promise<{ address: string; name: string }> {
  * Devices already granted in an earlier page load, if this browser remembers them across reloads
  * (Chrome's getDevices() — not on every browser that otherwise supports Web Bluetooth; feature-detected).
  */
-export async function rememberedHubs(): Promise<Array<{ address: string; name: string }>> {
+export async function rememberedHubs(): Promise<
+  Array<{ address: string; name: string }>
+> {
   if (!isWebBluetoothSupported()) return [];
   // @types/web-bluetooth declares getDevices() as always present, but real support for it lags behind
   // Web Bluetooth itself — go through `unknown` so the optional check below isn't "impossible" to TS.
-  const bluetooth = navigator.bluetooth as unknown as { getDevices?: () => Promise<BluetoothDevice[]> };
+  const bluetooth = navigator.bluetooth as unknown as {
+    getDevices?: () => Promise<BluetoothDevice[]>;
+  };
   if (!bluetooth.getDevices) return [];
   const devices = await bluetooth.getDevices();
   return devices.map(remember);
@@ -60,18 +72,24 @@ async function resolveDevice(nameOrAddress: string): Promise<BluetoothDevice> {
   if (known) return known;
   // Not granted this page load (e.g. a reload) — see if the browser still remembers it from before.
   await rememberedHubs();
-  const remembered = knownDevices.get(nameOrAddress) ?? [...knownDevices.values()].find((d) => d.id === nameOrAddress);
+  const remembered =
+    knownDevices.get(nameOrAddress) ??
+    [...knownDevices.values()].find((d) => d.id === nameOrAddress);
   if (remembered) return remembered;
   throw new Error(t("errors.webBluetoothNotGranted", { name: nameOrAddress }));
 }
 
 function onCharacteristicValueChanged(event: Event): void {
   const target = event.target as BluetoothRemoteGATTCharacteristic;
-  if (target.value && notifyHandler) notifyHandler(new TextDecoder().decode(target.value));
+  if (target.value && notifyHandler)
+    notifyHandler(new TextDecoder().decode(target.value));
 }
 
 /** `nameOrAddress` is whatever requestHub()/rememberedHubs() gave back — a hub's advertised name, or its address. */
-export async function connect(nameOrAddress: string, onDisconnect?: () => void): Promise<void> {
+export async function connect(
+  nameOrAddress: string,
+  onDisconnect?: () => void,
+): Promise<void> {
   const device = await resolveDevice(nameOrAddress);
   if (current?.device === device && device.gatt?.connected) return;
   if (current) disconnect();
@@ -79,10 +97,15 @@ export async function connect(nameOrAddress: string, onDisconnect?: () => void):
   if (!device.gatt) throw new Error(t("errors.webBluetoothNotConnected"));
   const server = await device.gatt.connect();
   const service = await server.getPrimaryService(HUB_SERVICE_UUID);
-  const characteristic = await service.getCharacteristic(HUB_CHARACTERISTIC_UUID);
+  const characteristic = await service.getCharacteristic(
+    HUB_CHARACTERISTIC_UUID,
+  );
   current = { device, characteristic };
 
-  if (onDisconnect) device.addEventListener("gattserverdisconnected", onDisconnect, { once: true });
+  if (onDisconnect)
+    device.addEventListener("gattserverdisconnected", onDisconnect, {
+      once: true,
+    });
 }
 
 export function disconnect(): void {
@@ -90,21 +113,37 @@ export function disconnect(): void {
   current = null;
 }
 
-export async function writeString(data: string): Promise<void> {
+export async function readString(): Promise<string> {
   if (!current) throw new Error(t("errors.webBluetoothNotConnected"));
-  await current.characteristic.writeValueWithoutResponse(new TextEncoder().encode(data));
+  const value = await current.characteristic.readValue();
+  return new TextDecoder().decode(value);
 }
 
-export async function subscribeString(handler: (data: string) => void): Promise<void> {
+export async function writeString(data: string): Promise<void> {
+  if (!current) throw new Error(t("errors.webBluetoothNotConnected"));
+  await current.characteristic.writeValueWithoutResponse(
+    new TextEncoder().encode(data),
+  );
+}
+
+export async function subscribeString(
+  handler: (data: string) => void,
+): Promise<void> {
   if (!current) throw new Error(t("errors.webBluetoothNotConnected"));
   notifyHandler = handler;
-  current.characteristic.addEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
+  current.characteristic.addEventListener(
+    "characteristicvaluechanged",
+    onCharacteristicValueChanged,
+  );
   await current.characteristic.startNotifications();
 }
 
 export async function unsubscribeString(): Promise<void> {
   if (!current) return;
-  current.characteristic.removeEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
+  current.characteristic.removeEventListener(
+    "characteristicvaluechanged",
+    onCharacteristicValueChanged,
+  );
   await current.characteristic.stopNotifications().catch(() => undefined);
   notifyHandler = null;
 }

@@ -1,25 +1,45 @@
 "use client";
 
+import {
+  AlertCircle,
+  Bluetooth,
+  Check,
+  Loader2,
+  Radio,
+  Wifi,
+  Zap,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { AlertCircle, Bluetooth, Check, Loader2, Radio, Wifi, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
-import { useHubsStore } from "@/lib/store/hubs-store";
-import type { TKey } from "@/lib/i18n";
-import { errorMessage as describeApiError } from "@/lib/i18n/errors";
 import { ApiError } from "@/lib/api/auth";
 import { startClaim } from "@/lib/api/mqtt";
-import { useRunsInApp } from "@/lib/platform";
 import {
   connectToHub,
   describeBleError,
   disconnectFromHub,
   provisionWifi,
-  scanForHubs,
+  readDeviceId,
   type ScannedHub,
+  scanForHubs,
 } from "@/lib/device/ble-provisioning";
+import type { TKey } from "@/lib/i18n";
+import { errorMessage as describeApiError } from "@/lib/i18n/errors";
+import { useRunsInApp } from "@/lib/platform";
+import type {
+  PhysicalDevice,
+  PhysicalProductType,
+} from "@/lib/store/hubs-store";
+import { useHubsStore } from "@/lib/store/hubs-store";
 
-type Step = "scanning" | "pick" | "connecting" | "wifi" | "provisioning" | "claiming" | "name" | "error";
+type Step =
+  | "scanning"
+  | "pick"
+  | "connecting"
+  | "wifi"
+  | "provisioning"
+  | "claiming"
+  | "name"
+  | "error";
 
 const PRODUCT_LABEL = {
   "hub-ir": "pairing.product.hub-ir",
@@ -46,16 +66,10 @@ export function BleProvisioning({
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  // A second relay8/hub-ir left at its default name is indistinguishable from the first in every
-  // list that shows "via {hubName}" (category-client.tsx's Switches screen, etc.) — number it so
-  // the two are told apart even if the user never bothers to rename it here.
-  const existingOfSameProduct = useHubsStore(
-    (s) => s.physicalDevices.filter((d) => d.productType === product).length
-  );
-  const defaultName =
-    existingOfSameProduct > 0
-      ? `${t(PRODUCT_LABEL[product])} ${existingOfSameProduct + 1}`
-      : t(PRODUCT_LABEL[product]);
+  // Suggested name is exactly what the device itself advertises over BLE (DEVICE_PROFILE in
+  // firmware, e.g. "SmartIrHub") — not an app-invented label. It's only ever shown/used once a
+  // device is picked (pick() below sets it); the product label is just the pre-pick fallback.
+  const defaultName = picked?.name ?? t(PRODUCT_LABEL[product]);
   const [name, setName] = useState(defaultName);
   const [errorMessage, setErrorMessage] = useState("");
   const [wifiError, setWifiError] = useState("");
@@ -87,11 +101,16 @@ export function BleProvisioning({
 
   function pick(device: ScannedHub) {
     setPicked(device);
+    setName(device.name);
     setStep("connecting");
     connectToHub(device.address, () => {
       // Expected once the device reboots after accepting WiFi credentials — no-op past that point.
     })
-      .then(() => {
+      // The advertised name is just the shared product label now — learn the real, unique deviceId
+      // via a GATT read right after connecting, before anything else touches the link.
+      .then(() => readDeviceId())
+      .then((id) => {
+        setDeviceId(id);
         setStep("wifi");
       })
       .catch((error: unknown) => {
@@ -119,10 +138,11 @@ export function BleProvisioning({
   }
 
   async function submitWifi() {
-    if (!picked) return;
+    if (!picked || !deviceId) return;
     setWifiError("");
     setStep("provisioning");
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
+    const timeZone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh";
     let keepConnected = false;
 
     try {
@@ -138,11 +158,10 @@ export function BleProvisioning({
         return;
       }
 
-      // Accepted (or no reply — the claim below is then the real check). The device reboots
-      // onto the new network; its real deviceId is its advertised name.
-      setDeviceId(picked.name);
+      // Accepted (or no reply — the claim below is then the real check). The device reboots onto
+      // the new network; deviceId was already learned via GATT read right after connecting.
       setStep("claiming");
-      await startClaim(picked.name, name.trim() || defaultName);
+      await startClaim(deviceId, name.trim() || defaultName);
       setStep("name");
     } catch (error) {
       if (error instanceof ApiError && error.status === 408) {
@@ -184,7 +203,11 @@ export function BleProvisioning({
           <Bluetooth className="size-10 text-primary" />
           <p className="text-sm font-medium">{t("pairing.webSelectTitle")}</p>
           <p className="text-xs text-muted-foreground">
-            {t("pairing.scanningHint", { product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(i18n.language) })}
+            {t("pairing.scanningHint", {
+              product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(
+                i18n.language,
+              ),
+            })}
           </p>
           <button
             type="button"
@@ -201,7 +224,9 @@ export function BleProvisioning({
         <Bluetooth className="size-10 animate-pulse text-primary" />
         <p className="text-sm font-medium">{t("pairing.scanning")}</p>
         <p className="text-xs text-muted-foreground">
-          {t("pairing.scanningHint", { product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(i18n.language) })}
+          {t("pairing.scanningHint", {
+            product: t(PRODUCT_LABEL[product]).toLocaleLowerCase(i18n.language),
+          })}
         </p>
       </div>
     );
@@ -210,9 +235,13 @@ export function BleProvisioning({
   if (step === "pick") {
     return (
       <div className="flex flex-col gap-3">
-        <p className="px-1 text-sm text-muted-foreground">{t("pairing.select")}</p>
+        <p className="px-1 text-sm text-muted-foreground">
+          {t("pairing.select")}
+        </p>
         {found.length === 0 && (
-          <p className="px-1 text-sm text-muted-foreground">{t("pairing.noneFound")}</p>
+          <p className="px-1 text-sm text-muted-foreground">
+            {t("pairing.noneFound")}
+          </p>
         )}
         {found.map((device) => (
           <button
@@ -225,8 +254,12 @@ export function BleProvisioning({
           >
             <Icon className="size-5 text-primary" />
             <div className="flex flex-1 flex-col">
-              <span className="text-sm font-medium">{device.name}</span>
-              <span className="text-xs text-muted-foreground">{t("pairing.signal", { rssi: device.rssi })}</span>
+              <span className="text-sm font-medium" title={device.address}>
+                {device.name}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("pairing.signal", { rssi: device.rssi })}
+              </span>
             </div>
           </button>
         ))}
@@ -247,7 +280,11 @@ export function BleProvisioning({
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
-        <p className="text-sm font-medium">{t("pairing.connecting", { name: picked?.name ?? "" })}</p>
+        <p className="text-sm font-medium">
+          {t("pairing.connecting", {
+            name: picked?.name ?? "",
+          })}
+        </p>
       </div>
     );
   }
@@ -272,20 +309,28 @@ export function BleProvisioning({
           </div>
         )}
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t("pairing.networkName")}</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("pairing.networkName")}
+          </span>
           <input
             value={ssid}
-            onChange={(e) => { setSsid(e.target.value); }}
+            onChange={(e) => {
+              setSsid(e.target.value);
+            }}
             required
             className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t("pairing.password")}</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("pairing.password")}
+          </span>
           <input
             type="password"
             value={password}
-            onChange={(e) => { setPassword(e.target.value); }}
+            onChange={(e) => {
+              setPassword(e.target.value);
+            }}
             required
             className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
           />
@@ -305,7 +350,9 @@ export function BleProvisioning({
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
         <p className="text-sm font-medium">
-          {step === "provisioning" ? t("pairing.checkingWifi") : t("pairing.claiming")}
+          {step === "provisioning"
+            ? t("pairing.checkingWifi")
+            : t("pairing.claiming")}
         </p>
         <p className="text-xs text-muted-foreground">
           {step === "provisioning"
@@ -349,10 +396,14 @@ export function BleProvisioning({
       </div>
       <input
         value={name}
-        onChange={(e) => { setName(e.target.value); }}
+        onChange={(e) => {
+          setName(e.target.value);
+        }}
         className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
       />
-      {saveError && <p className="text-center text-xs text-destructive">{saveError}</p>}
+      {saveError && (
+        <p className="text-center text-xs text-destructive">{saveError}</p>
+      )}
       <button
         type="button"
         onClick={() => {

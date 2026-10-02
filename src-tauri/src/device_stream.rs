@@ -9,8 +9,18 @@ use reqwest_eventsource::{Event, EventSource};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::async_runtime::JoinHandle;
 use tauri::{AppHandle, Emitter, State};
+
+// mqtt-service pings every 10s (see device-state-store.ts's STREAM_SILENCE_THRESHOLD_MS, which the
+// frontend uses to paint the connection red at 30s of silence). A dead TCP socket left over from a
+// network switch (WiFi -> another WiFi/cellular) doesn't error on its own - the OS doesn't always
+// notice the old interface is gone, so reqwest just blocks forever on a read that will never
+// complete, and reqwest-eventsource's own retry logic never kicks in. This watchdog forces a fresh
+// connection (which binds on whatever network is active now) if nothing - not even a ping - arrives
+// in time, well before the frontend's own 30s threshold so it doesn't need to wait that long either.
+const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(25);
 
 #[derive(Default)]
 pub struct DeviceStreamState(Mutex<HashMap<String, JoinHandle<()>>>);
@@ -33,6 +43,10 @@ const NOTIFICATION_STREAM_KEY: &str = "__notifications__";
 /// Opens `url` as an SSE stream and re-emits everything as Tauri events named `event_name`, until
 /// the returned task is aborted. Rust-side `open` / `error` pseudo-events tell the frontend when
 /// the stream (re)connected or failed; reqwest-eventsource retries by itself.
+fn open_event_source(client: &reqwest::Client, url: &str, token: &str) -> Result<EventSource, String> {
+    EventSource::new(client.get(url).bearer_auth(token)).map_err(|e| e.to_string())
+}
+
 fn spawn_stream(
     app: AppHandle,
     url: String,
@@ -40,11 +54,31 @@ fn spawn_stream(
     event_name: String,
 ) -> Result<JoinHandle<()>, String> {
     let client = reqwest::Client::new();
-    let request_builder = client.get(&url).bearer_auth(token);
-    let mut event_source = EventSource::new(request_builder).map_err(|e| e.to_string())?;
+    let mut event_source = open_event_source(&client, &url, &token)?;
 
     Ok(tauri::async_runtime::spawn(async move {
-        while let Some(event) = event_source.next().await {
+        loop {
+            let event = match tokio::time::timeout(STREAM_IDLE_TIMEOUT, event_source.next()).await {
+                Ok(Some(event)) => event,
+                Ok(None) => break,
+                Err(_elapsed) => {
+                    // Not even a ping in STREAM_IDLE_TIMEOUT - most likely a socket left stranded by
+                    // a network switch. Don't wait on it any longer; open a new one now.
+                    event_source.close();
+                    event_source = match open_event_source(&client, &url, &token) {
+                        Ok(source) => source,
+                        Err(err) => {
+                            let _ = app.emit(
+                                &event_name,
+                                DeviceEventPayload { event: "error".to_string(), data: err },
+                            );
+                            break;
+                        }
+                    };
+                    continue;
+                }
+            };
+
             match event {
                 // Tell the frontend the stream is (re)connected so it can clear a previous error.
                 Ok(Event::Open) => {
