@@ -1,24 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TKey } from "@/lib/i18n";
-import { useRunsInApp } from "@/lib/platform";
-import { isWebBluetoothSupported } from "@/lib/device/web-bluetooth";
-import { errorMessage } from "@/lib/i18n/errors";
-import { SHADE_COLORS, type Device } from "@/lib/mock-data";
-import type { PhysicalDevice, PhysicalProductType } from "@/lib/store/hubs-store";
-import { useDevicesStore } from "@/lib/store/devices-store";
-import { ProductPicker } from "@/components/home/add-device/product-picker";
+import { AcSetup } from "@/components/home/add-device/ac-setup";
+import { AlarmSetup } from "@/components/home/add-device/alarm-setup";
 import { BleProvisioning } from "@/components/home/add-device/ble-provisioning";
 import { HubFunctionChoice } from "@/components/home/add-device/hub-function-choice";
-import { AcSetup } from "@/components/home/add-device/ac-setup";
-import { RemoteSetup } from "@/components/home/add-device/remote-setup";
-import { RelaySetup } from "@/components/home/add-device/relay-setup";
 import { NativeFunctionSetup } from "@/components/home/add-device/native-function-setup";
-import { AlarmSetup } from "@/components/home/add-device/alarm-setup";
+import { ProductPicker } from "@/components/home/add-device/product-picker";
+import { RelaySetup } from "@/components/home/add-device/relay-setup";
+import { RemoteSetup } from "@/components/home/add-device/remote-setup";
+import { isWebBluetoothSupported } from "@/lib/device/web-bluetooth";
+import type { TKey } from "@/lib/i18n";
+import { errorMessage } from "@/lib/i18n/errors";
+import { type Device, SHADE_COLORS } from "@/lib/mock-data";
+import { useRunsInApp } from "@/lib/platform";
+import { useDevicesStore } from "@/lib/store/devices-store";
+import type {
+  PhysicalDevice,
+  PhysicalProductType,
+} from "@/lib/store/hubs-store";
 
 type Step =
   | { name: "product" }
@@ -59,11 +62,14 @@ export function AddDeviceFlow({
   const [step, setStep] = useState<Step>(
     initialHub
       ? { name: "hub-function", hubId: initialHub.id, hubName: initialHub.name }
-      : { name: "product" }
+      : { name: "product" },
   );
 
   function finishToRoom() {
-    router.push(`/home/room?id=${roomId}`);
+    // replace, not push: this screen was itself reached by pushing on top of the room page, so
+    // pushing again here would leave add-device stuck in the history stack — back from the room
+    // page would pop right back into it instead of wherever the user was before adding a device.
+    router.replace(`/home/room?id=${roomId}`);
   }
 
   // Creating a device needs the server (it assigns the real id), so saving can fail or take a moment:
@@ -103,9 +109,15 @@ export function AddDeviceFlow({
         </button>
       </div>
 
-      {saving && <p className="text-center text-xs text-muted-foreground">{t("addDevice.saving")}</p>}
+      {saving && (
+        <p className="text-center text-xs text-muted-foreground">
+          {t("addDevice.saving")}
+        </p>
+      )}
       {saveError && (
-        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{saveError}</p>
+        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {saveError}
+        </p>
       )}
 
       {step.name === "product" && (
@@ -118,8 +130,12 @@ export function AddDeviceFlow({
 
       {step.name === "provisioning" && !inApp && !isWebBluetoothSupported() && (
         <div className="flex flex-col items-center gap-3 pt-10 text-center">
-          <p className="text-sm font-medium">{t("addDevice.webPairingTitle")}</p>
-          <p className="text-xs text-muted-foreground">{t("addDevice.webPairingBody")}</p>
+          <p className="text-sm font-medium">
+            {t("addDevice.webPairingTitle")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t("addDevice.webPairingBody")}
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -138,7 +154,11 @@ export function AddDeviceFlow({
           roomId={roomId}
           onComplete={(created) => {
             if (created.productType === "hub-ir") {
-              setStep({ name: "hub-function", hubId: created.id, hubName: created.name });
+              setStep({
+                name: "hub-function",
+                hubId: created.id,
+                hubName: created.name,
+              });
             } else {
               setStep({ name: "relay", physicalId: created.id });
             }
@@ -150,7 +170,11 @@ export function AddDeviceFlow({
         <HubFunctionChoice
           hubName={step.hubName}
           onSelect={(kind) => {
-            setStep({ name: kind, hubId: step.hubId, hubName: step.hubName } as Step);
+            setStep({
+              name: kind,
+              hubId: step.hubId,
+              hubName: step.hubName,
+            } as Step);
           }}
         />
       )}
