@@ -194,6 +194,7 @@
   "addDevice": {
     "steps": {
       "product": "Thêm thiết bị",
+      "pickHub": "Chọn Hub IR",
       "provisioning": "Kết nối thiết bị",
       "hubFunction": "Thêm chức năng",
       "ac": "Thêm điều hoà",
@@ -208,6 +209,8 @@
     "rgbPlaceholder": "vd: Dải đèn RGB phòng ngủ",
     "tempPlaceholder": "vd: Máy sưởi phòng khách",
     "whatAdding": "Bạn muốn thêm gì?",
+    "pickHubPrompt": "Chức năng này dùng Hub IR nào?",
+    "pairNewHub": "Ghép nối Hub IR mới",
     "products": {
       "hubIr": {
         "name": "Hub IR",
@@ -393,7 +396,9 @@
     "via": "qua {{hub}}",
     "power": "Nguồn",
     "shade": "Sắc thái {{n}}",
-    "colorWheel": "Bánh xe màu"
+    "colorWheel": "Bánh xe màu",
+    "favorite": "Thêm {{name}} vào Yêu thích",
+    "unfavorite": "Bỏ {{name}} khỏi Yêu thích"
   },
   "ac": {
     "subject": {

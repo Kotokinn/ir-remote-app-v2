@@ -8,7 +8,14 @@ function CategoryPageContent() {
   const searchParams = useSearchParams();
   const roomId = searchParams.get("room") ?? "";
   const categoryId = searchParams.get("category") ?? "";
-  return <CategoryClient roomId={roomId} categoryId={categoryId} />;
+  const deviceId = searchParams.get("device") ?? undefined;
+  return (
+    <CategoryClient
+      roomId={roomId}
+      categoryId={categoryId}
+      initialDeviceId={deviceId}
+    />
+  );
 }
 
 export default function CategoryPage() {

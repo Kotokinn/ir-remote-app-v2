@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -57,9 +57,12 @@ const TOGGLE_SEND_DEBOUNCE_MS = 300;
 export function CategoryClient({
   roomId,
   categoryId,
+  initialDeviceId,
 }: {
   roomId: string;
   categoryId: string;
+  /** Deep-link from Favorites straight to one device, instead of defaulting to the first in view. */
+  initialDeviceId?: string;
 }) {
   const router = useRouter();
   const { t } = useTranslation();
@@ -73,7 +76,11 @@ export function CategoryClient({
     (d) =>
       (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId,
   );
-  const [selectedId, setSelectedId] = useState(devices[0]?.id);
+  const [selectedId, setSelectedId] = useState(
+    (initialDeviceId && devices.some((d) => d.id === initialDeviceId)
+      ? initialDeviceId
+      : devices[0]?.id),
+  );
   const [deleteTarget, setDeleteTarget] = useState<Device | undefined>(
     undefined,
   );
@@ -320,6 +327,10 @@ export function CategoryClient({
               isOn={device.isOn}
               hubName={hubNameFor(device)}
               disabled={lockedToggleIds.has(device.id)}
+              isFavorite={device.isFavorite}
+              onToggleFavorite={() => {
+                void updateDevice(device.id, { isFavorite: !device.isFavorite });
+              }}
               onRemove={
                 mayEdit(device)
                   ? () => {
@@ -340,12 +351,8 @@ export function CategoryClient({
               const active = device.id === selectedDevice.id;
               const chipHub = getPhysicalDevice(physicalDevices, device.hubId);
               return (
-                <button
+                <div
                   key={device.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(device.id);
-                  }}
                   className={cn(
                     "relative flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center transition-colors",
                     active
@@ -358,11 +365,43 @@ export function CategoryClient({
                       <HubStatusDot hub={chipHub} />
                     </span>
                   )}
-                  <CategoryIcon className="size-5" />
-                  <span className="w-full truncate text-[10px] font-medium">
-                    {device.name}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void updateDevice(device.id, {
+                        isFavorite: !device.isFavorite,
+                      });
+                    }}
+                    aria-label={t(
+                      device.isFavorite ? "device.unfavorite" : "device.favorite",
+                      { name: device.name },
+                    )}
+                    className="absolute top-1.5 start-1.5"
+                  >
+                    <Star
+                      className={cn(
+                        "size-3.5",
+                        device.isFavorite
+                          ? "fill-amber-400 text-amber-400"
+                          : active
+                            ? "text-primary-foreground/50"
+                            : "text-muted-foreground/40",
+                      )}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(device.id);
+                    }}
+                    className="flex flex-col items-center gap-1.5"
+                  >
+                    <CategoryIcon className="size-5" />
+                    <span className="w-full truncate text-[10px] font-medium">
+                      {device.name}
+                    </span>
+                  </button>
+                </div>
               );
             })}
           </div>

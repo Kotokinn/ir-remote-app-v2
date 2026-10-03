@@ -1,8 +1,9 @@
 "use client";
 
-import { Trash2, type LucideIcon } from "lucide-react";
+import { Star, Trash2, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 export function ToggleDeviceRow({
   icon: Icon,
@@ -10,6 +11,8 @@ export function ToggleDeviceRow({
   isOn,
   hubName,
   disabled,
+  isFavorite,
+  onToggleFavorite,
   onRemove,
   onChange,
 }: {
@@ -19,6 +22,8 @@ export function ToggleDeviceRow({
   hubName?: string;
   /** Locked briefly after a tap so a spam-tap can't fire another command before the last one settles. */
   disabled?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
   onRemove?: () => void;
   onChange?: (isOn: boolean) => void;
 }) {
@@ -35,6 +40,18 @@ export function ToggleDeviceRow({
           <span className="truncate text-[11px] text-muted-foreground">{t("device.via", { hub: hubName })}</span>
         )}
       </div>
+      {onToggleFavorite && (
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-label={t(isFavorite ? "device.unfavorite" : "device.favorite", { name })}
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+        >
+          <Star
+            className={cn("size-4", isFavorite && "fill-primary text-primary")}
+          />
+        </button>
+      )}
       <Switch
         checked={isOn}
         disabled={disabled}

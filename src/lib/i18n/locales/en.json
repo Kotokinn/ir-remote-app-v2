@@ -202,6 +202,7 @@
   "addDevice": {
     "steps": {
       "product": "Add device",
+      "pickHub": "Choose Hub IR",
       "provisioning": "Connect device",
       "hubFunction": "Add a function",
       "ac": "Add air conditioner",
@@ -216,6 +217,8 @@
     "rgbPlaceholder": "e.g. Bedroom RGB strip",
     "tempPlaceholder": "e.g. Living room heater",
     "whatAdding": "What are you adding?",
+    "pickHubPrompt": "Which Hub IR should this function use?",
+    "pairNewHub": "Pair a new Hub IR instead",
     "products": {
       "hubIr": {
         "name": "IR Hub",
@@ -403,7 +406,9 @@
     "via": "via {{hub}}",
     "power": "Power",
     "shade": "Shade {{n}}",
-    "colorWheel": "Color wheel"
+    "colorWheel": "Color wheel",
+    "favorite": "Add {{name}} to Favorites",
+    "unfavorite": "Remove {{name}} from Favorites"
   },
   "ac": {
     "subject": {

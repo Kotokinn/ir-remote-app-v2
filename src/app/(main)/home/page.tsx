@@ -23,7 +23,7 @@ export default function MyHomePage() {
   const sharedDeviceCount = devices.filter((d) => d.roomId === SHARED_ROOM_ID).length;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8 lg:max-w-full">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("nav.home")}</h1>
         <button

@@ -70,6 +70,8 @@ export interface Device {
   categoryId: CategoryId;
   isOn: boolean;
   kind: DeviceKind;
+  /** Shown on the Favorites page for quick access. Local UI preference, synced like any other field. */
+  isFavorite?: boolean;
   /** Physical hub/module (PhysicalDevice.id) this virtual device is derived from, if any. */
   hubId?: string;
   // Household sharing — set by the server, absent on a device that was just built locally.

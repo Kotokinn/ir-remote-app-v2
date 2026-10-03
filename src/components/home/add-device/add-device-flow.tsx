@@ -18,13 +18,15 @@ import { errorMessage } from "@/lib/i18n/errors";
 import { type Device, SHADE_COLORS } from "@/lib/mock-data";
 import { useRunsInApp } from "@/lib/platform";
 import { useDevicesStore } from "@/lib/store/devices-store";
-import type {
-  PhysicalDevice,
-  PhysicalProductType,
+import {
+  type PhysicalDevice,
+  type PhysicalProductType,
+  useHubsStore,
 } from "@/lib/store/hubs-store";
 
 type Step =
   | { name: "product" }
+  | { name: "pick-hub"; product: PhysicalProductType; hubs: PhysicalDevice[] }
   | { name: "provisioning"; product: PhysicalProductType }
   | { name: "hub-function"; hubId: string; hubName: string }
   | { name: "ac"; hubId: string; hubName: string }
@@ -36,6 +38,7 @@ type Step =
 
 const TITLES: Record<Step["name"], TKey> = {
   product: "addDevice.steps.product",
+  "pick-hub": "addDevice.steps.pickHub",
   provisioning: "addDevice.steps.provisioning",
   "hub-function": "addDevice.steps.hubFunction",
   ac: "addDevice.steps.ac",
@@ -58,6 +61,7 @@ export function AddDeviceFlow({
   const inApp = useRunsInApp();
   const addDevice = useDevicesStore((s) => s.addDevice);
   const addDevices = useDevicesStore((s) => s.addDevices);
+  const physicalDevices = useHubsStore((s) => s.physicalDevices);
 
   const [step, setStep] = useState<Step>(
     initialHub
@@ -123,9 +127,67 @@ export function AddDeviceFlow({
       {step.name === "product" && (
         <ProductPicker
           onSelect={(product) => {
+            // hub-ir is "multi-function": several function kinds (AC, remote, RGB, temp, alarm)
+            // can live on the one already-paired hub, told apart by categoryId/kind alone, no
+            // channel index needed — unlike relay8, where even a single module still needs its
+            // channel picked explicitly, so this shortcut doesn't apply there (see the room/device
+            // naming discussion). Only one existing Hub IR in this room → skip straight to picking
+            // its function, no extra "which device" step. None → pair a new one, same as before.
+            // Two or more → genuinely ambiguous, ask which one.
+            const existingHubs = physicalDevices.filter(
+              (hub) =>
+                hub.productType === product &&
+                (roomId === "all" || hub.roomId === roomId),
+            );
+            if (product === "hub-ir" && existingHubs.length === 1) {
+              const hub = existingHubs[0];
+              setStep({
+                name: "hub-function",
+                hubId: hub.id,
+                hubName: hub.name,
+              });
+              return;
+            }
+            if (product === "hub-ir" && existingHubs.length > 1) {
+              setStep({ name: "pick-hub", product, hubs: existingHubs });
+              return;
+            }
             setStep({ name: "provisioning", product });
           }}
         />
+      )}
+
+      {step.name === "pick-hub" && (
+        <div className="flex flex-col gap-3">
+          <p className="px-1 text-sm text-muted-foreground">
+            {t("addDevice.pickHubPrompt")}
+          </p>
+          {step.hubs.map((hub) => (
+            <button
+              key={hub.id}
+              type="button"
+              onClick={() => {
+                setStep({
+                  name: "hub-function",
+                  hubId: hub.id,
+                  hubName: hub.name,
+                });
+              }}
+              className="flex items-center gap-3 rounded-2xl bg-card p-4 text-start shadow-sm ring-1 ring-border transition-colors hover:bg-accent/40"
+            >
+              <span className="text-sm font-medium">{hub.name}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setStep({ name: "provisioning", product: step.product });
+            }}
+            className="mt-2 text-center text-sm font-medium text-primary"
+          >
+            {t("addDevice.pairNewHub")}
+          </button>
+        </div>
       )}
 
       {step.name === "provisioning" && !inApp && !isWebBluetoothSupported() && (
@@ -167,16 +229,30 @@ export function AddDeviceFlow({
       )}
 
       {step.name === "hub-function" && (
-        <HubFunctionChoice
-          hubName={step.hubName}
-          onSelect={(kind) => {
-            setStep({
-              name: kind,
-              hubId: step.hubId,
-              hubName: step.hubName,
-            } as Step);
-          }}
-        />
+        <div className="flex flex-col gap-3">
+          <HubFunctionChoice
+            hubName={step.hubName}
+            onSelect={(kind) => {
+              setStep({
+                name: kind,
+                hubId: step.hubId,
+                hubName: step.hubName,
+              } as Step);
+            }}
+          />
+          {/* The single-existing-hub shortcut in ProductPicker's onSelect above skips straight
+              here, bypassing the "pick-hub" screen that normally hosts this — without it, pairing
+              a genuinely new, additional Hub IR would be unreachable once one already exists. */}
+          <button
+            type="button"
+            onClick={() => {
+              setStep({ name: "provisioning", product: "hub-ir" });
+            }}
+            className="text-center text-sm font-medium text-primary"
+          >
+            {t("addDevice.pairNewHub")}
+          </button>
+        </div>
       )}
 
       {step.name === "ac" && (
