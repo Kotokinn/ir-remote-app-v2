@@ -48,3 +48,8 @@ client_secret_*.json
 /keystore/
 *.jks
 *.keystore
+
+# personal scratch files (firmware backups, notes) — not part of this project's source
+/backup.txt
+/note.txt
+/tb.txt
