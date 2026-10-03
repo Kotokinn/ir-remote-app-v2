@@ -517,17 +517,8 @@
     "expand": "Mở rộng"
   },
   "favorites": {
-    "addAria": "Thêm mục yêu thích",
-    "items": {
-      "fav-dimmer": "Đèn chỉnh sáng",
-      "fav-tubelight": "Đèn tuýp",
-      "fav-bedlamp": "Đèn ngủ",
-      "fav-thermostat": "Bộ điều nhiệt sảnh",
-      "fav-ac": "Điều hoà",
-      "fav-lock": "Khoá cửa chính",
-      "fav-curtain": "Rèm cửa",
-      "fav-presence": "Chế độ có người"
-    }
+    "empty": "Chưa có mục yêu thích",
+    "emptyHint": "Chạm vào ngôi sao trên màn điều khiển thiết bị để ghim vào đây."
   },
   "ota": {
     "available": "Đã có firmware {{newVersion}} (hiện tại {{currentVersion}}).",

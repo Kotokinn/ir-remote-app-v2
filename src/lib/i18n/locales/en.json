@@ -527,17 +527,8 @@
     "expand": "Expand"
   },
   "favorites": {
-    "addAria": "Add favorite",
-    "items": {
-      "fav-dimmer": "Dimmer",
-      "fav-tubelight": "Tubelight",
-      "fav-bedlamp": "Bed lamp",
-      "fav-thermostat": "Hall thermostat",
-      "fav-ac": "AC",
-      "fav-lock": "Front door lock",
-      "fav-curtain": "Curtain",
-      "fav-presence": "Presence mode"
-    }
+    "empty": "No favorites yet",
+    "emptyHint": "Tap the star on a device's control screen to pin it here."
   },
   "ota": {
     "available": "Firmware {{newVersion}} is available (current {{currentVersion}}).",

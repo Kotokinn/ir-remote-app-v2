@@ -7,10 +7,6 @@ import {
   ShieldCheck,
   Power,
   AlarmClock,
-  Lamp,
-  Sun,
-  Thermometer,
-  Lock,
   Bell,
   UserRound,
   Users,
@@ -152,28 +148,6 @@ export function categoryDevices(devices: Device[], roomId: string, categoryId: s
 export function getCategory(id: string): Category | undefined {
   return (CATEGORIES as Record<string, Category>)[id];
 }
-
-export interface FavoriteDevice {
-  id: string;
-  nameKey: TKey;
-  icon: LucideIcon;
-  isOn: boolean;
-  mode?: "morning" | "day" | "night";
-  intensity?: number;
-  colorIndex?: number;
-  controllable: boolean;
-}
-
-export const FAVORITES: FavoriteDevice[] = [
-  { id: "fav-dimmer", nameKey: "favorites.items.fav-dimmer", icon: Sun, isOn: false, controllable: true, intensity: 30, mode: "day", colorIndex: 3 },
-  { id: "fav-tubelight", nameKey: "favorites.items.fav-tubelight", icon: Lightbulb, isOn: true, controllable: true, intensity: 80, mode: "day", colorIndex: 5 },
-  { id: "fav-bedlamp", nameKey: "favorites.items.fav-bedlamp", icon: Lamp, isOn: true, controllable: true, intensity: 68, mode: "day", colorIndex: 7 },
-  { id: "fav-thermostat", nameKey: "favorites.items.fav-thermostat", icon: Thermometer, isOn: false, controllable: false },
-  { id: "fav-ac", nameKey: "favorites.items.fav-ac", icon: AirVent, isOn: false, controllable: false },
-  { id: "fav-lock", nameKey: "favorites.items.fav-lock", icon: Lock, isOn: false, controllable: false },
-  { id: "fav-curtain", nameKey: "favorites.items.fav-curtain", icon: Blinds, isOn: false, controllable: false },
-  { id: "fav-presence", nameKey: "favorites.items.fav-presence", icon: PersonStanding, isOn: true, controllable: false },
-];
 
 export interface SceneAction {
   deviceId: string;

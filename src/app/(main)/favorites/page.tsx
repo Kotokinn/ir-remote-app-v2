@@ -1,114 +1,100 @@
 "use client";
 
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Star } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { FAVORITES, type FavoriteDevice } from "@/lib/mock-data";
+import { getCategory } from "@/lib/mock-data";
+import { useDevicesStore } from "@/lib/store/devices-store";
+import { useHubsStore, getPhysicalDevice } from "@/lib/store/hubs-store";
 import { cn } from "@/lib/utils";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
-import { LightControlPanel } from "@/components/devices/light-control-panel";
 
 export default function FavoritesPage() {
   const { t } = useTranslation();
-  const [favorites, setFavorites] = useState<FavoriteDevice[]>(FAVORITES);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const openDevice = favorites.find((f) => f.id === openId);
-
-  function toggle(id: string) {
-    setFavorites((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, isOn: !f.isOn } : f))
-    );
-  }
+  const router = useRouter();
+  const allDevices = useDevicesStore((s) => s.devices);
+  const updateDevice = useDevicesStore((s) => s.updateDevice);
+  const physicalDevices = useHubsStore((s) => s.physicalDevices);
+  const favorites = allDevices.filter((d) => d.isFavorite);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-5 pb-6 lg:px-8 lg:max-w-full">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("nav.favorites")}</h1>
-        <button
-          type="button"
-          className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground/70"
-          aria-label={t("favorites.addAria")}
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold">{t("nav.favorites")}</h1>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {favorites.map((device) => {
-          const Icon = device.icon;
-          return (
-            <button
-              key={device.id}
-              type="button"
-              onClick={() => {
-                if (device.controllable) {
-                  setOpenId(device.id);
-                } else {
-                  toggle(device.id);
-                }
-              }}
-              className={cn(
-                "flex flex-col items-start gap-4 rounded-2xl p-4 text-start shadow-sm transition-colors",
-                device.isOn
-                  ? "bg-brand-gradient text-primary-foreground"
-                  : "bg-card text-foreground ring-1 ring-border"
-              )}
-            >
-              <span
+      {favorites.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 px-4 pt-10 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-accent text-primary">
+            <Star className="size-6" />
+          </span>
+          <p className="text-sm font-medium">{t("favorites.empty")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("favorites.emptyHint")}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {favorites.map((device) => {
+            const category = getCategory(device.categoryId);
+            const Icon = category?.icon ?? Star;
+            const hubName = getPhysicalDevice(physicalDevices, device.hubId)?.name;
+            return (
+              <div
+                key={device.id}
                 className={cn(
-                  "text-[10px] font-semibold tracking-wide uppercase",
-                  device.isOn ? "text-primary-foreground/80" : "text-muted-foreground"
+                  "relative flex flex-col items-start gap-4 rounded-2xl p-4 text-start shadow-sm transition-colors",
+                  device.isOn
+                    ? "bg-brand-gradient text-primary-foreground"
+                    : "bg-card text-foreground ring-1 ring-border",
                 )}
               >
-                {device.isOn ? t("common.on") : t("common.off")}
-              </span>
-              <Icon className="size-8" strokeWidth={1.6} />
-              <span className="text-sm font-medium">{t(device.nameKey)}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <Drawer
-        open={Boolean(openDevice)}
-        onOpenChange={(open) => {
-          if (!open) setOpenId(null);
-        }}
-      >
-        <DrawerContent className="sm:inset-x-0 sm:bottom-6 sm:mx-auto sm:max-w-md sm:rounded-2xl">
-          <DrawerHeader>
-            <DrawerTitle className="sr-only">{openDevice ? t(openDevice.nameKey) : ""}</DrawerTitle>
-          </DrawerHeader>
-          {openDevice && (
-            <div className="px-4 pb-2">
-              <LightControlPanel
-                key={openDevice.id}
-                icon={openDevice.icon}
-                name={t(openDevice.nameKey)}
-                isOn={openDevice.isOn}
-                mode={openDevice.mode}
-                intensity={openDevice.intensity}
-                colorIndex={openDevice.colorIndex}
-              />
-            </div>
-          )}
-          <DrawerFooter>
-            <button
-              type="button"
-              onClick={() => { setOpenId(null); }}
-              className="h-11 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground"
-            >
-              {t("common.ok")}
-            </button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void updateDevice(device.id, { isFavorite: false });
+                  }}
+                  aria-label={t("device.unfavorite", { name: device.name })}
+                  className="absolute top-3 end-3"
+                >
+                  <Star className="size-4 fill-amber-400 text-amber-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push(
+                      `/home/category?room=${device.roomId}&category=${device.categoryId}&device=${device.id}`,
+                    );
+                  }}
+                  className="flex flex-col items-start gap-4 text-start"
+                >
+                  <span
+                    className={cn(
+                      "text-[10px] font-semibold tracking-wide uppercase",
+                      device.isOn
+                        ? "text-primary-foreground/80"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {device.isOn ? t("common.on") : t("common.off")}
+                  </span>
+                  <Icon className="size-8" strokeWidth={1.6} />
+                  <span className="text-sm font-medium">{device.name}</span>
+                  {hubName && (
+                    <span
+                      className={cn(
+                        "truncate text-[11px]",
+                        device.isOn
+                          ? "text-primary-foreground/70"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {t("device.via", { hub: hubName })}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
