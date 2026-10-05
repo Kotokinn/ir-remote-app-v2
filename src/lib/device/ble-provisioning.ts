@@ -208,6 +208,7 @@ export async function readDeviceId(): Promise<string> {
   const frame = runsInApp()
     ? await readCharacteristicWithRetry()
     : await webReadString();
+  console.info("[ble] readDeviceId raw frame:", JSON.stringify(frame));
   const separatorIndex = frame.indexOf("|");
   if (separatorIndex < 0) {
     throw new Error(t("errors.bleDeviceIdMissing"));

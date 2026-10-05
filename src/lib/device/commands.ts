@@ -15,12 +15,13 @@ const AC_MODE_TO_INT: Record<AcMode, number> = {
   fan: 4,
 };
 
+// docs/MQTT_API.md sendAc fan: 0=auto,1=low,2=medium,3=high,4=min,5=max (firmware toCommonFan matches).
 const FAN_SPEED_TO_INT: Record<AcState["fanSpeed"], number> = {
   auto: 0,
   low: 1,
-  min: 2,
-  medium: 3,
-  high: 4,
+  medium: 2,
+  high: 3,
+  min: 4,
   max: 5,
 };
 
@@ -46,7 +47,10 @@ export interface SendAcCommand {
   };
 }
 
-export function buildSendAcCommand(brandOrProtocol: string, state: AcState): SendAcCommand {
+export function buildSendAcCommand(
+  brandOrProtocol: string,
+  state: AcState,
+): SendAcCommand {
   return {
     method: "sendAc",
     params: {
@@ -71,19 +75,31 @@ export interface SleepModeState {
 
 export interface SetSleepModeCommand {
   method: "setSleepMode";
-  params: { enabled: boolean; subject?: AcSleepSubject; wakeTime?: string; targetTemp?: number };
+  params: {
+    enabled: boolean;
+    subject?: AcSleepSubject;
+    wakeTime?: string;
+    targetTemp?: number;
+  };
 }
 
 // docs/MQTT_API.md setSleepMode: disabling never sends subject/wakeTime/targetTemp (turns off
 // immediately, no IR sent); enabling needs subject+wakeTime, targetTemp stays optional (omitted ->
 // firmware default for that subject).
-export function buildSetSleepModeCommand(state: SleepModeState): SetSleepModeCommand {
+export function buildSetSleepModeCommand(
+  state: SleepModeState,
+): SetSleepModeCommand {
   if (!state.enabled) {
     return { method: "setSleepMode", params: { enabled: false } };
   }
   return {
     method: "setSleepMode",
-    params: { enabled: true, subject: state.subject, wakeTime: state.wakeTime, targetTemp: state.targetTemp },
+    params: {
+      enabled: true,
+      subject: state.subject,
+      wakeTime: state.wakeTime,
+      targetTemp: state.targetTemp,
+    },
   };
 }
 
@@ -100,16 +116,30 @@ const RGB_EFFECT_TO_MODE: Record<RgbEffect, number> = {
 
 // UI's Speed slider is 1 (slow) - 5 (fast); firmware's setRgbSpeed takes ms/step (docs/MQTT_API.md,
 // LED_RGB::setSpeed) - lower ms = faster. Linear, 30ms apart, matching the effects' suggested ranges.
-const RGB_SPEED_TO_MS: Record<number, number> = { 1: 140, 2: 110, 3: 80, 4: 50, 5: 20 };
+const RGB_SPEED_TO_MS: Record<number, number> = {
+  1: 140,
+  2: 110,
+  3: 80,
+  4: 50,
+  5: 20,
+};
 
-export function buildRgbCommands(state: RgbState): Array<{ method: string; params: Record<string, unknown> }> {
+export function buildRgbCommands(
+  state: RgbState,
+): Array<{ method: string; params: Record<string, unknown> }> {
   if (!state.isOn) {
     return [{ method: "setRgbMode", params: { mode: 0 } }];
   }
   return [
     { method: "setRgbColor", params: { color: state.color } },
-    { method: "setRgbMode", params: { mode: RGB_EFFECT_TO_MODE[state.effect] } },
+    {
+      method: "setRgbMode",
+      params: { mode: RGB_EFFECT_TO_MODE[state.effect] },
+    },
     { method: "setRgbBrightness", params: { value: state.intensity } },
-    { method: "setRgbSpeed", params: { value: RGB_SPEED_TO_MS[state.effectSpeed] ?? 80 } },
+    {
+      method: "setRgbSpeed",
+      params: { value: RGB_SPEED_TO_MS[state.effectSpeed] ?? 80 },
+    },
   ];
 }

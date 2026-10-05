@@ -38,6 +38,12 @@ function accountFromAccessToken(accessToken: string): AuthAccount {
   return { id: claims.accountId, email: claims.sub, roles };
 }
 
+// Refresh tokens are single-use on the server (rotateRefreshToken revokes the one it was given). Opening the
+// app fires many requests at once with an expired access token; if each one refreshed on its own, the
+// second and later would present an already-revoked token, the server would reject it, and the session
+// would be dropped. Concurrent callers share one refresh instead.
+let refreshInFlight: Promise<string> | null = null;
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -58,24 +64,37 @@ export const useAuthStore = create<AuthState>()(
         });
       },
       setSession: (accessToken, refreshToken) => {
-        set({ accessToken, refreshToken, account: accountFromAccessToken(accessToken) });
-      },
-      refreshAccessToken: async () => {
-        const currentRefreshToken = get().refreshToken;
-        if (!currentRefreshToken) {
-          throw new Error("No refresh token available");
-        }
-        const response = await authApi.refreshToken(currentRefreshToken);
         set({
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-          account: {
-            id: response.account.id,
-            email: response.account.email,
-            roles: response.account.roles,
-          },
+          accessToken,
+          refreshToken,
+          account: accountFromAccessToken(accessToken),
         });
-        return response.accessToken;
+      },
+      refreshAccessToken: () => {
+        if (!refreshInFlight) {
+          const doRefresh = async (): Promise<string> => {
+            const currentRefreshToken = get().refreshToken;
+            if (!currentRefreshToken) {
+              throw new Error("No refresh token available");
+            }
+            const response = await authApi.refreshToken(currentRefreshToken);
+            set({
+              accessToken: response.accessToken,
+              refreshToken: response.refreshToken,
+              account: {
+                id: response.account.id,
+                email: response.account.email,
+                roles: response.account.roles,
+              },
+            });
+            return response.accessToken;
+          };
+          // .finally() always runs after the assignment below, even when doRefresh fails synchronously.
+          refreshInFlight = doRefresh().finally(() => {
+            refreshInFlight = null;
+          });
+        }
+        return refreshInFlight;
       },
       logout: () => {
         // Clear local session immediately regardless of the network — the user is logged out from
@@ -84,7 +103,10 @@ export const useAuthStore = create<AuthState>()(
         set({ accessToken: null, refreshToken: null, account: null });
         if (currentRefreshToken) {
           authApi.logout(currentRefreshToken).catch((error: unknown) => {
-            console.warn("[auth] server-side logout failed (session is still cleared locally)", error);
+            console.warn(
+              "[auth] server-side logout failed (session is still cleared locally)",
+              error,
+            );
           });
         }
       },
@@ -104,6 +126,6 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         account: state.account,
       }),
-    }
-  )
+    },
+  ),
 );

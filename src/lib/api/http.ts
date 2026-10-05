@@ -26,15 +26,21 @@ async function rawRequest(
 }
 
 async function toResult<T>(response: Response): Promise<T> {
+  // Raw body first, so the exact server reply is visible in the console even when it isn't valid JSON.
+  const raw = await response.text();
+  console.info(`[http] ${response.status} ${response.url} raw:`, raw);
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => undefined)) as
-      | ApiErrorBody
-      | undefined;
+    let errorBody: ApiErrorBody | undefined;
+    try {
+      errorBody = JSON.parse(raw) as ApiErrorBody;
+    } catch {
+      errorBody = undefined;
+    }
     throw new ApiError(response.status, errorBody);
   }
   // 202 (e.g. mqtt-service accepting a command) carries nothing the callers use.
   if (response.status === 202 || response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return JSON.parse(raw) as T;
 }
 
 export async function apiRequest<T>(

@@ -77,9 +77,9 @@ export function CategoryClient({
       (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId,
   );
   const [selectedId, setSelectedId] = useState(
-    (initialDeviceId && devices.some((d) => d.id === initialDeviceId)
+    initialDeviceId && devices.some((d) => d.id === initialDeviceId)
       ? initialDeviceId
-      : devices[0]?.id),
+      : devices[0]?.id,
   );
   const [deleteTarget, setDeleteTarget] = useState<Device | undefined>(
     undefined,
@@ -329,7 +329,9 @@ export function CategoryClient({
               disabled={lockedToggleIds.has(device.id)}
               isFavorite={device.isFavorite}
               onToggleFavorite={() => {
-                void updateDevice(device.id, { isFavorite: !device.isFavorite });
+                void updateDevice(device.id, {
+                  isFavorite: !device.isFavorite,
+                });
               }}
               onRemove={
                 mayEdit(device)
@@ -373,7 +375,9 @@ export function CategoryClient({
                       });
                     }}
                     aria-label={t(
-                      device.isFavorite ? "device.unfavorite" : "device.favorite",
+                      device.isFavorite
+                        ? "device.unfavorite"
+                        : "device.favorite",
                       { name: device.name },
                     )}
                     className="absolute top-1.5 start-1.5"
@@ -459,6 +463,7 @@ export function CategoryClient({
                   name={selectedDevice.name}
                   buttons={selectedDevice.buttons ?? []}
                   hubName={hubNameFor(selectedDevice)}
+                  deviceId={realDeviceIdFor(selectedDevice)}
                   onButtonsChange={(buttons) => {
                     void updateDevice(selectedDevice.id, { buttons });
                   }}

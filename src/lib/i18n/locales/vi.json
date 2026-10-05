@@ -312,6 +312,8 @@
   },
   "remoteSetup": {
     "defaultName": "Remote",
+    "hubNotReady": "Hub này chưa kết nối. Đợi hub online rồi thử lại.",
+    "learnFailed": "Không học được nút này: {{reason}}. Hướng remote gốc về phía hub rồi thử lại.",
     "whatSettingUp": "Bạn đang thiết lập thiết bị gì? (vd: TV phòng khách)",
     "namePlaceholder": "Tên thiết bị",
     "pointRemote": "Hướng remote gốc vào hub và nhấn “{{label}}”",

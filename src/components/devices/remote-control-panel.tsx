@@ -1,21 +1,30 @@
 "use client";
 
-import { useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getRemoteButtonIcon, remoteButtonLabel, REMOTE_BUTTON_PRESETS, type RemoteButton } from "@/lib/remote-buttons";
 import { RemoteButtonPicker } from "@/components/devices/remote-button-picker";
+import { sendLearnedIr } from "@/lib/device/ir-learn";
+import {
+  getRemoteButtonIcon,
+  REMOTE_BUTTON_PRESETS,
+  type RemoteButton,
+  remoteButtonLabel,
+} from "@/lib/remote-buttons";
 import { cn } from "@/lib/utils";
 
 export function RemoteControlPanel({
   name,
   buttons: initialButtons,
   hubName,
+  deviceId,
   onButtonsChange,
 }: {
   name: string;
   buttons: RemoteButton[];
   hubName?: string;
+  /** The hub's real deviceId — needed to replay a learned IR code. */
+  deviceId?: string;
   onButtonsChange?: (buttons: RemoteButton[]) => void;
 }) {
   const { t } = useTranslation();
@@ -35,6 +44,11 @@ export function RemoteControlPanel({
     setTimeout(() => {
       setPressedId((id) => (id === button.id ? null : id));
     }, 200);
+    if (button.ir && deviceId) {
+      sendLearnedIr(deviceId, button.ir).catch((error: unknown) => {
+        console.error("[remote] replaying learned IR failed", error);
+      });
+    }
   }
 
   function handleRemove(id: string) {
@@ -46,7 +60,11 @@ export function RemoteControlPanel({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-base font-semibold">{name}</span>
-          {hubName && <span className="text-xs text-muted-foreground">{t("device.via", { hub: hubName })}</span>}
+          {hubName && (
+            <span className="text-xs text-muted-foreground">
+              {t("device.via", { hub: hubName })}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -55,7 +73,9 @@ export function RemoteControlPanel({
           }}
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-            editing ? "bg-primary text-primary-foreground" : "bg-muted text-foreground/70"
+            editing
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-foreground/70",
           )}
         >
           <Pencil className="size-3.5" />
@@ -75,11 +95,13 @@ export function RemoteControlPanel({
                 }}
                 className={cn(
                   "flex w-full flex-col items-center gap-1.5 rounded-2xl bg-card px-2 py-3 text-[11px] font-medium shadow-sm ring-1 ring-border transition-all",
-                  pressedId === button.id && "scale-95 bg-accent ring-primary"
+                  pressedId === button.id && "scale-95 bg-accent ring-primary",
                 )}
               >
                 <Icon className="size-5" />
-                <span className="w-full truncate text-center">{remoteButtonLabel(button.iconKey, button.label)}</span>
+                <span className="w-full truncate text-center">
+                  {remoteButtonLabel(button.iconKey, button.label)}
+                </span>
               </button>
               {editing && (
                 <button
@@ -87,7 +109,9 @@ export function RemoteControlPanel({
                   onClick={() => {
                     handleRemove(button.id);
                   }}
-                  aria-label={t("room.removeAria", { name: remoteButtonLabel(button.iconKey, button.label) })}
+                  aria-label={t("room.removeAria", {
+                    name: remoteButtonLabel(button.iconKey, button.label),
+                  })}
                   className="absolute -top-1.5 -end-1.5 flex size-5 items-center justify-center rounded-full bg-destructive text-white"
                 >
                   <X className="size-3" />
@@ -131,7 +155,12 @@ export function RemoteControlPanel({
         onPickCustom={(label) => {
           commit([
             ...buttons,
-            { id: `custom-${Date.now().toString(36)}`, label, iconKey: "custom", group: "custom" },
+            {
+              id: `custom-${Date.now().toString(36)}`,
+              label,
+              iconKey: "custom",
+              group: "custom",
+            },
           ]);
           setPickerOpen(false);
         }}

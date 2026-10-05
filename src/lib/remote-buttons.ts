@@ -5,10 +5,11 @@ import {
   ChevronRight,
   ChevronUp,
   Circle,
-  FastForward,
   Fan,
+  FastForward,
   Hash,
   Home,
+  type LucideIcon,
   Menu,
   Play,
   Power,
@@ -21,9 +22,8 @@ import {
   Volume1,
   Volume2,
   VolumeX,
-  type LucideIcon,
 } from "lucide-react";
-import { t, type TKey } from "@/lib/i18n";
+import { type TKey, t } from "@/lib/i18n";
 
 export type RemoteButtonGroupId =
   | "power"
@@ -45,9 +45,14 @@ export interface RemoteButton {
   label: string;
   iconKey: string;
   group: RemoteButtonGroupId;
+  /** The learned IR code (base64 of µs samples, see lib/device/ir-learn.ts). Absent until the button is learned. */
+  ir?: { base64: string };
 }
 
-export const REMOTE_BUTTON_GROUPS: Array<{ id: RemoteButtonGroupId; labelKey: TKey }> = [
+export const REMOTE_BUTTON_GROUPS: Array<{
+  id: RemoteButtonGroupId;
+  labelKey: TKey;
+}> = [
   { id: "power", labelKey: "remoteGroup.power" },
   { id: "nav", labelKey: "remoteGroup.nav" },
   { id: "volume", labelKey: "remoteGroup.volume" },
@@ -89,9 +94,8 @@ export const REMOTE_BUTTON_PRESETS: RemoteButtonPreset[] = [
   })),
 ];
 
-export const REMOTE_BUTTON_ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
-  REMOTE_BUTTON_PRESETS.map((p) => [p.id, p.icon])
-);
+export const REMOTE_BUTTON_ICON_MAP: Record<string, LucideIcon> =
+  Object.fromEntries(REMOTE_BUTTON_PRESETS.map((p) => [p.id, p.icon]));
 REMOTE_BUTTON_ICON_MAP.custom = Sparkles;
 REMOTE_BUTTON_ICON_MAP["ac-temp-up"] = Thermometer;
 REMOTE_BUTTON_ICON_MAP["ac-temp-down"] = Thermometer;
@@ -129,7 +133,10 @@ const PRESET_LABEL_KEYS: Partial<Record<string, TKey>> = {
  * What to show on a button: the app's own presets are translated at display time (so a button learned
  * in one language reads correctly in another); a custom button shows the name the user typed.
  */
-export function remoteButtonLabel(iconKey: string, storedLabel: string): string {
+export function remoteButtonLabel(
+  iconKey: string,
+  storedLabel: string,
+): string {
   const key = PRESET_LABEL_KEYS[iconKey];
   return key ? t(key) : storedLabel;
 }

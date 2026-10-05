@@ -1,20 +1,26 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Plus } from "lucide-react";
+import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
+import { RemoteButtonPicker } from "@/components/devices/remote-button-picker";
+import { learnIr } from "@/lib/device/ir-learn";
 import type { Device } from "@/lib/mock-data";
 import {
-  REMOTE_BUTTON_PRESETS,
   getRemoteButtonIcon,
-  remoteButtonLabel,
+  REMOTE_BUTTON_PRESETS,
   type RemoteButton,
   type RemoteButtonPreset,
+  remoteButtonLabel,
 } from "@/lib/remote-buttons";
-import { RemoteButtonPicker } from "@/components/devices/remote-button-picker";
+import { getPhysicalDevice, useHubsStore } from "@/lib/store/hubs-store";
 
 type Step = "naming" | "buttons";
-type Pending = { label: string; iconKey: string; group: RemoteButton["group"] } | null;
+type Pending = {
+  label: string;
+  iconKey: string;
+  group: RemoteButton["group"];
+} | null;
 
 function newDeviceId() {
   return `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -35,18 +41,40 @@ export function RemoteSetup({
   const [buttons, setButtons] = useState<RemoteButton[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
+  const [learnError, setLearnError] = useState("");
+  const physicalDevices = useHubsStore((s) => s.physicalDevices);
+  const hubDeviceId = getPhysicalDevice(physicalDevices, hubId)?.deviceId;
 
-  function learn(next: Pending) {
+  async function learn(next: Pending) {
+    if (!next) return;
     setPickerOpen(false);
+    setLearnError("");
+    if (!hubDeviceId) {
+      setLearnError(t("remoteSetup.hubNotReady"));
+      return;
+    }
     setPending(next);
-    setTimeout(() => {
-      if (!next) return;
+    try {
+      const ir = await learnIr(hubDeviceId);
       setButtons((prev) => [
         ...prev,
-        { id: `${next.iconKey}-${Date.now().toString(36)}`, label: next.label, iconKey: next.iconKey, group: next.group },
+        {
+          id: `${next.iconKey}-${Date.now().toString(36)}`,
+          label: next.label,
+          iconKey: next.iconKey,
+          group: next.group,
+          ir,
+        },
       ]);
+    } catch (error) {
+      setLearnError(
+        t("remoteSetup.learnFailed", {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
       setPending(null);
-    }, 700);
+    }
   }
 
   function finish() {
@@ -70,7 +98,9 @@ export function RemoteSetup({
         </p>
         <input
           value={name}
-          onChange={(e) => { setName(e.target.value); }}
+          onChange={(e) => {
+            setName(e.target.value);
+          }}
           placeholder={t("remoteSetup.namePlaceholder")}
           autoFocus
           className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
@@ -78,7 +108,9 @@ export function RemoteSetup({
         <button
           type="button"
           disabled={!name.trim()}
-          onClick={() => { setStep("buttons"); }}
+          onClick={() => {
+            setStep("buttons");
+          }}
           className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-50"
         >
           {t("common.continue")}
@@ -97,9 +129,13 @@ export function RemoteSetup({
           })()}
         </span>
         <p className="text-sm font-medium">
-          {t("remoteSetup.pointRemote", { label: remoteButtonLabel(pending.iconKey, pending.label) })}
+          {t("remoteSetup.pointRemote", {
+            label: remoteButtonLabel(pending.iconKey, pending.label),
+          })}
         </p>
-        <p className="text-xs text-muted-foreground">{t("remoteSetup.learning")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("remoteSetup.learning")}
+        </p>
       </div>
     );
   }
@@ -114,6 +150,12 @@ export function RemoteSetup({
         />
       </p>
 
+      {learnError && (
+        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {learnError}
+        </p>
+      )}
+
       <div className="grid grid-cols-4 gap-3">
         {buttons.map((button) => {
           const Icon = getRemoteButtonIcon(button.iconKey);
@@ -123,13 +165,17 @@ export function RemoteSetup({
               className="flex flex-col items-center gap-1.5 rounded-2xl bg-card px-2 py-3 text-[11px] font-medium shadow-sm ring-1 ring-border"
             >
               <Icon className="size-5" />
-              <span className="w-full truncate text-center">{remoteButtonLabel(button.iconKey, button.label)}</span>
+              <span className="w-full truncate text-center">
+                {remoteButtonLabel(button.iconKey, button.label)}
+              </span>
             </div>
           );
         })}
         <button
           type="button"
-          onClick={() => { setPickerOpen(true); }}
+          onClick={() => {
+            setPickerOpen(true);
+          }}
           className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-3 text-[11px] font-medium text-muted-foreground"
         >
           <Plus className="size-5" />
@@ -153,10 +199,14 @@ export function RemoteSetup({
         presets={REMOTE_BUTTON_PRESETS}
         learnedIds={buttons.map((b) => b.iconKey)}
         onPick={(preset: RemoteButtonPreset) => {
-          learn({ label: preset.label, iconKey: preset.id, group: preset.group });
+          void learn({
+            label: preset.label,
+            iconKey: preset.id,
+            group: preset.group,
+          });
         }}
         onPickCustom={(label) => {
-          learn({ label, iconKey: "custom", group: "custom" });
+          void learn({ label, iconKey: "custom", group: "custom" });
         }}
       />
     </div>

@@ -320,6 +320,8 @@
   },
   "remoteSetup": {
     "defaultName": "Remote",
+    "hubNotReady": "This hub isn't connected yet. Wait for it to come online, then try again.",
+    "learnFailed": "Couldn't learn that button: {{reason}}. Point the original remote at the hub and try again.",
     "whatSettingUp": "What are you setting up? (e.g. Living room TV)",
     "namePlaceholder": "Device name",
     "pointRemote": "Point the original remote at the hub and press “{{label}}”",
