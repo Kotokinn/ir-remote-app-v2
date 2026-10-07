@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const THRESHOLD = 64;
@@ -12,6 +12,9 @@ async function defaultRefresh() {
   await new Promise((resolve) => setTimeout(resolve, 500));
 }
 
+// Touch events, not pointer events: on mobile the browser starts a native pan after a few px and then
+// fires pointercancel, so pointermove stops and the indicator never grows. A non-passive touchmove can
+// preventDefault the native scroll while the user pulls down from the top.
 export function PullToRefresh({
   children,
   onRefresh = defaultRefresh,
@@ -22,75 +25,98 @@ export function PullToRefresh({
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const startY = useRef<number | null>(null);
-  const pointerIdRef = useRef<number | null>(null);
+  const onRefreshRef = useRef(onRefresh);
+  const trackingRef = useRef(false);
   const capturedRef = useRef(false);
+  const startYRef = useRef(0);
+  const pullRef = useRef(0);
+  const refreshingRef = useRef(false);
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (refreshing) return;
-    if ((containerRef.current?.scrollTop ?? 0) > 0) return;
-    startY.current = e.clientY;
-    pointerIdRef.current = e.pointerId;
-    capturedRef.current = false;
-  }
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  });
 
-  function handlePointerMove(e: PointerEvent<HTMLDivElement>) {
-    if (startY.current === null) return;
-    const delta = e.clientY - startY.current;
-    if (delta <= 0 || (containerRef.current?.scrollTop ?? 0) > 0) {
-      setPull(0);
-      return;
-    }
-    if (!capturedRef.current && delta > CAPTURE_AFTER && pointerIdRef.current !== null) {
-      capturedRef.current = true;
-      setDragging(true);
-      e.currentTarget.setPointerCapture(pointerIdRef.current);
-    }
-    setPull(Math.min(delta * 0.5, MAX_PULL));
-  }
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  function endDrag(e: PointerEvent<HTMLDivElement>) {
-    if (pointerIdRef.current === null) return;
-    if (capturedRef.current) {
-      e.currentTarget.releasePointerCapture(pointerIdRef.current);
-    }
-    startY.current = null;
-    pointerIdRef.current = null;
-    capturedRef.current = false;
-    setDragging(false);
+    const setPullValue = (value: number) => {
+      pullRef.current = value;
+      setPull(value);
+    };
 
-    if (pull >= THRESHOLD) {
-      setRefreshing(true);
-      setPull(THRESHOLD * 0.8);
-      void Promise.resolve(onRefresh()).finally(() => {
-        setRefreshing(false);
-        setPull(0);
-      });
-    } else {
-      setPull(0);
-    }
-  }
+    const onStart = (e: TouchEvent) => {
+      if (refreshingRef.current || el.scrollTop > 0) return;
+      trackingRef.current = true;
+      capturedRef.current = false;
+      startYRef.current = e.touches[0].clientY;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (!trackingRef.current) return;
+      const delta = e.touches[0].clientY - startYRef.current;
+      if (el.scrollTop > 0 || delta <= 0) {
+        setPullValue(0);
+        return;
+      }
+      if (!capturedRef.current && delta > CAPTURE_AFTER) {
+        capturedRef.current = true;
+        setDragging(true);
+      }
+      if (capturedRef.current) {
+        if (e.cancelable) e.preventDefault();
+        setPullValue(Math.min(delta * 0.5, MAX_PULL));
+      }
+    };
+
+    const onEnd = () => {
+      if (!trackingRef.current) return;
+      trackingRef.current = false;
+      capturedRef.current = false;
+      setDragging(false);
+
+      if (pullRef.current >= THRESHOLD) {
+        refreshingRef.current = true;
+        setRefreshing(true);
+        setPullValue(THRESHOLD * 0.8);
+        void Promise.resolve(onRefreshRef.current()).finally(() => {
+          refreshingRef.current = false;
+          setRefreshing(false);
+          setPullValue(0);
+        });
+      } else {
+        setPullValue(0);
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
       className={cn(
         "flex-1 overflow-y-auto overscroll-y-contain",
         dragging && "select-none",
-        className
+        className,
       )}
     >
       <div
         className={cn(
           "flex items-center justify-center overflow-hidden",
-          !dragging && "transition-[height] duration-300 ease-out"
+          !dragging && "transition-[height] duration-300 ease-out",
         )}
         style={{ height: pull }}
       >

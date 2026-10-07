@@ -278,6 +278,8 @@
     "sendWifi": "Send your Wi-Fi details over Bluetooth",
     "networkName": "Network name",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "connect": "Connect",
     "checkingWifi": "Checking your Wi-Fi…",
     "claiming": "Device is connecting — claiming it…",
@@ -435,7 +437,10 @@
     },
     "swing": {
       "highest": "Highest",
+      "high": "High",
+      "upperMiddle": "Upper middle",
       "middle": "Middle",
+      "low": "Low",
       "lowest": "Lowest",
       "auto": "Auto"
     },

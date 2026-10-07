@@ -27,12 +27,15 @@ const FAN_SPEED_TO_INT: Record<AcState["fanSpeed"], number> = {
 
 // Vertical swing (louver up/down), not horizontal — the firmware/doc don't expose horizontal swing.
 // docs/MQTT_API.md's swing is a richer 0-7 enum (off/auto/highest/high/middle/low/lowest/
-// upperMiddle); the UI exposes these 4 (no "off" — swing is always in one of these positions).
+// upperMiddle); the UI exposes these 7 (no "off" — swing is always in one of these positions).
 const SWING_TO_INT: Record<AcState["swing"], number> = {
   auto: 1,
   highest: 2,
+  high: 3,
   middle: 4,
+  low: 5,
   lowest: 6,
+  upperMiddle: 7,
 };
 
 export interface SendAcCommand {

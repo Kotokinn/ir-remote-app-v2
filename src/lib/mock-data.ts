@@ -1,23 +1,23 @@
 import {
-  Lightbulb,
   AirVent,
-  Radio,
-  Blinds,
-  PersonStanding,
-  ShieldCheck,
-  Power,
   AlarmClock,
   Bell,
+  Blinds,
+  LifeBuoy,
+  Lightbulb,
+  type LucideIcon,
+  PersonStanding,
+  Power,
+  Radio,
+  RefreshCw,
+  ShieldCheck,
+  ShieldQuestion,
+  Lightbulb as TipIcon,
   UserRound,
   Users,
-  ShieldQuestion,
-  RefreshCw,
-  LifeBuoy,
-  Lightbulb as TipIcon,
-  type LucideIcon,
 } from "lucide-react";
-import type { RemoteButton } from "@/lib/remote-buttons";
 import type { TKey } from "@/lib/i18n";
+import type { RemoteButton } from "@/lib/remote-buttons";
 
 export type CategoryId =
   | "lighting"
@@ -37,14 +37,49 @@ export interface Category {
 }
 
 export const CATEGORIES: Record<CategoryId, Category> = {
-  lighting: { id: "lighting", nameKey: "category.lighting", icon: Lightbulb, color: "text-amber-500" },
-  hvac: { id: "hvac", nameKey: "category.hvac", icon: AirVent, color: "text-sky-500" },
+  lighting: {
+    id: "lighting",
+    nameKey: "category.lighting",
+    icon: Lightbulb,
+    color: "text-amber-500",
+  },
+  hvac: {
+    id: "hvac",
+    nameKey: "category.hvac",
+    icon: AirVent,
+    color: "text-sky-500",
+  },
   ir: { id: "ir", nameKey: "category.ir", icon: Radio, color: "text-rose-500" },
-  curtains: { id: "curtains", nameKey: "category.curtains", icon: Blinds, color: "text-emerald-600" },
-  sensors: { id: "sensors", nameKey: "category.sensors", icon: PersonStanding, color: "text-orange-500" },
-  security: { id: "security", nameKey: "category.security", icon: ShieldCheck, color: "text-blue-600" },
-  switches: { id: "switches", nameKey: "category.switches", icon: Power, color: "text-fuchsia-500" },
-  alarm: { id: "alarm", nameKey: "category.alarm", icon: AlarmClock, color: "text-red-500" },
+  curtains: {
+    id: "curtains",
+    nameKey: "category.curtains",
+    icon: Blinds,
+    color: "text-emerald-600",
+  },
+  sensors: {
+    id: "sensors",
+    nameKey: "category.sensors",
+    icon: PersonStanding,
+    color: "text-orange-500",
+  },
+  security: {
+    id: "security",
+    nameKey: "category.security",
+    icon: ShieldCheck,
+    color: "text-blue-600",
+  },
+  switches: {
+    id: "switches",
+    nameKey: "category.switches",
+    icon: Power,
+    color: "text-fuchsia-500",
+  },
+  alarm: {
+    id: "alarm",
+    nameKey: "category.alarm",
+    icon: AlarmClock,
+    color: "text-red-500",
+  },
 };
 
 export type DeviceKind = "toggle" | "light" | "ac" | "remote" | "alarm" | "rgb";
@@ -52,9 +87,16 @@ export type AcMode = "cool" | "heat" | "fan" | "auto" | "dry";
 export type FanSpeed = "auto" | "low" | "min" | "medium" | "high" | "max";
 /**
  * Vertical swing (the louver's up/down sweep) — not horizontal swing, which the firmware/doc don't
- * expose. docs/MQTT_API.md's sendAc `swing` is a richer 0-7 enum; the app exposes these 4 (no "off").
+ * expose. docs/MQTT_API.md's sendAc `swing` is a richer 0-7 enum; the app exposes these 7 (no "off").
  */
-export type AcSwing = "auto" | "highest" | "middle" | "lowest";
+export type AcSwing =
+  | "auto"
+  | "highest"
+  | "high"
+  | "upperMiddle"
+  | "middle"
+  | "low"
+  | "lowest";
 /** docs/MQTT_API.md setSleepMode: who is sleeping, decides the default sleep temperature. */
 export type AcSleepSubject = "child" | "adult" | "elder";
 export type RgbEffect = "solid" | "blink" | "breathe" | "flow" | "chase";
@@ -126,7 +168,7 @@ export const SHADE_COLORS = [
 
 export function roomCategories(
   devices: Device[],
-  roomId: string
+  roomId: string,
 ): Array<Category & { count: number }> {
   const counts = new Map<CategoryId, number>();
   for (const device of devices) {
@@ -139,9 +181,14 @@ export function roomCategories(
   }));
 }
 
-export function categoryDevices(devices: Device[], roomId: string, categoryId: string) {
+export function categoryDevices(
+  devices: Device[],
+  roomId: string,
+  categoryId: string,
+) {
   return devices.filter(
-    (d) => (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId
+    (d) =>
+      (roomId === "all" || d.roomId === roomId) && d.categoryId === categoryId,
   );
 }
 
@@ -197,7 +244,11 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
   { id: "profile", labelKey: "settings.items.profile", icon: UserRound },
   { id: "household", labelKey: "settings.items.household", icon: Users },
   { id: "account", labelKey: "settings.items.account", icon: ShieldQuestion },
-  { id: "sync-options", labelKey: "settings.items.sync-options", icon: RefreshCw },
+  {
+    id: "sync-options",
+    labelKey: "settings.items.sync-options",
+    icon: RefreshCw,
+  },
   { id: "support", labelKey: "settings.items.support", icon: LifeBuoy },
   { id: "tips", labelKey: "settings.items.tips", icon: TipIcon },
 ];

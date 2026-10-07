@@ -4,6 +4,8 @@ import {
   AlertCircle,
   Bluetooth,
   Check,
+  Eye,
+  EyeOff,
   Loader2,
   Radio,
   Wifi,
@@ -65,6 +67,7 @@ export function BleProvisioning({
   const [picked, setPicked] = useState<ScannedHub | null>(null);
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   // Suggested name is exactly what the device itself advertises over BLE (DEVICE_PROFILE in
   // firmware, e.g. "SmartIrHub") — not an app-invented label. It's only ever shown/used once a

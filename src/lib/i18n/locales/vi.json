@@ -270,7 +270,9 @@
     "sendWifi": "Gửi thông tin Wi-Fi của bạn qua Bluetooth",
     "networkName": "Tên mạng",
     "password": "Mật khẩu",
-    "connect": "Kết nối",
+    "showPassword": "Hiện mật khẩu",
+    "hidePassword": "Ẩn mật khẩu",
+    "connect":"Kết nối",
     "checkingWifi": "Đang kiểm tra Wi-Fi của bạn…",
     "claiming": "Thiết bị đang kết nối — đang đăng ký thiết bị…",
     "checkingWifiHint": "Thiết bị đang thử kết nối vào mạng Wi-Fi của bạn. Việc này có thể mất tới 20 giây.",
@@ -425,7 +427,10 @@
     },
     "swing": {
       "highest": "Cao nhất",
+      "high": "Cao",
+      "upperMiddle": "Giữa trên",
       "middle": "Giữa",
+      "low": "Thấp",
       "lowest": "Thấp nhất",
       "auto": "Tự động"
     },
