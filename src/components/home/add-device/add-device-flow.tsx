@@ -7,11 +7,14 @@ import { useTranslation } from "react-i18next";
 import { AcSetup } from "@/components/home/add-device/ac-setup";
 import { AlarmSetup } from "@/components/home/add-device/alarm-setup";
 import { BleProvisioning } from "@/components/home/add-device/ble-provisioning";
+import { ClaimMethodChoice } from "@/components/home/add-device/claim-method-choice";
 import { HubFunctionChoice } from "@/components/home/add-device/hub-function-choice";
 import { NativeFunctionSetup } from "@/components/home/add-device/native-function-setup";
 import { ProductPicker } from "@/components/home/add-device/product-picker";
+import { QrClaim } from "@/components/home/add-device/qr-claim";
 import { RelaySetup } from "@/components/home/add-device/relay-setup";
 import { RemoteSetup } from "@/components/home/add-device/remote-setup";
+import { type ClaimMethod, claimMethodsFor } from "@/lib/device/claim-methods";
 import { isWebBluetoothSupported } from "@/lib/device/web-bluetooth";
 import type { TKey } from "@/lib/i18n";
 import { errorMessage } from "@/lib/i18n/errors";
@@ -27,7 +30,9 @@ import {
 type Step =
   | { name: "product" }
   | { name: "pick-hub"; product: PhysicalProductType; hubs: PhysicalDevice[] }
+  | { name: "method"; product: PhysicalProductType }
   | { name: "provisioning"; product: PhysicalProductType }
+  | { name: "qr"; product: PhysicalProductType }
   | { name: "hub-function"; hubId: string; hubName: string }
   | { name: "ac"; hubId: string; hubName: string }
   | { name: "remote"; hubId: string; hubName: string }
@@ -39,7 +44,9 @@ type Step =
 const TITLES: Record<Step["name"], TKey> = {
   product: "addDevice.steps.product",
   "pick-hub": "addDevice.steps.pickHub",
+  method: "addDevice.steps.method",
   provisioning: "addDevice.steps.provisioning",
+  qr: "addDevice.steps.qr",
   "hub-function": "addDevice.steps.hubFunction",
   ac: "addDevice.steps.ac",
   remote: "addDevice.steps.remote",
@@ -48,6 +55,11 @@ const TITLES: Record<Step["name"], TKey> = {
   alarm: "addDevice.steps.alarm",
   relay: "addDevice.steps.relay",
 };
+
+/** The step that runs one way of adding a device. */
+function flowFor(method: ClaimMethod, product: PhysicalProductType): Step {
+  return method === "qr" ? { name: "qr", product } : { name: "provisioning", product };
+}
 
 export function AddDeviceFlow({
   roomId,
@@ -68,6 +80,24 @@ export function AddDeviceFlow({
       ? { name: "hub-function", hubId: initialHub.id, hubName: initialHub.name }
       : { name: "product" },
   );
+
+  /** A new device: straight into its only way of being added, or a choice when it has both. */
+  function pairNew(product: PhysicalProductType) {
+    const methods = claimMethodsFor(product);
+    if (methods.length > 1) {
+      setStep({ name: "method", product });
+      return;
+    }
+    setStep(flowFor(methods[0], product));
+  }
+
+  function afterPaired(created: PhysicalDevice) {
+    if (created.productType === "hub-ir") {
+      setStep({ name: "hub-function", hubId: created.id, hubName: created.name });
+    } else {
+      setStep({ name: "relay", physicalId: created.id });
+    }
+  }
 
   function finishToRoom() {
     // replace, not push: this screen was itself reached by pushing on top of the room page, so
@@ -152,7 +182,7 @@ export function AddDeviceFlow({
               setStep({ name: "pick-hub", product, hubs: existingHubs });
               return;
             }
-            setStep({ name: "provisioning", product });
+            pairNew(product);
           }}
         />
       )}
@@ -181,13 +211,37 @@ export function AddDeviceFlow({
           <button
             type="button"
             onClick={() => {
-              setStep({ name: "provisioning", product: step.product });
+              pairNew(step.product);
             }}
             className="mt-2 text-center text-sm font-medium text-primary"
           >
             {t("addDevice.pairNewHub")}
           </button>
         </div>
+      )}
+
+      {step.name === "method" && (
+        <ClaimMethodChoice
+          methods={claimMethodsFor(step.product)}
+          onSelect={(method) => {
+            setStep(flowFor(method, step.product));
+          }}
+        />
+      )}
+
+      {step.name === "qr" && (
+        <QrClaim
+          product={step.product}
+          roomId={roomId}
+          onComplete={afterPaired}
+          onSetupWifi={
+            claimMethodsFor(step.product).includes("ble")
+              ? () => {
+                  setStep({ name: "provisioning", product: step.product });
+                }
+              : undefined
+          }
+        />
       )}
 
       {step.name === "provisioning" && !inApp && !isWebBluetoothSupported() && (
@@ -214,17 +268,7 @@ export function AddDeviceFlow({
         <BleProvisioning
           product={step.product}
           roomId={roomId}
-          onComplete={(created) => {
-            if (created.productType === "hub-ir") {
-              setStep({
-                name: "hub-function",
-                hubId: created.id,
-                hubName: created.name,
-              });
-            } else {
-              setStep({ name: "relay", physicalId: created.id });
-            }
-          }}
+          onComplete={afterPaired}
         />
       )}
 
@@ -246,7 +290,7 @@ export function AddDeviceFlow({
           <button
             type="button"
             onClick={() => {
-              setStep({ name: "provisioning", product: "hub-ir" });
+              pairNew("hub-ir");
             }}
             className="text-center text-sm font-medium text-primary"
           >

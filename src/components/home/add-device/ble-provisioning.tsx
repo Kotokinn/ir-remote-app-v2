@@ -6,6 +6,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Hand,
   Loader2,
   Radio,
   Wifi,
@@ -15,14 +16,20 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api/auth";
 import { startClaim } from "@/lib/api/mqtt";
+import { claimsApi } from "@/lib/api/smart";
 import {
+  ClaimModeRequiredError,
   connectToHub,
+  type DeviceIdentity,
   describeBleError,
   disconnectFromHub,
   provisionWifi,
+  queryIdentity,
   readDeviceId,
   type ScannedHub,
   scanForHubs,
+  sendClaimDone,
+  signClaimNonce,
 } from "@/lib/device/ble-provisioning";
 import type { TKey } from "@/lib/i18n";
 import { errorMessage as describeApiError } from "@/lib/i18n/errors";
@@ -37,6 +44,8 @@ type Step =
   | "scanning"
   | "pick"
   | "connecting"
+  | "hold-button"
+  | "verifying"
   | "wifi"
   | "provisioning"
   | "claiming"
@@ -62,6 +71,12 @@ export function BleProvisioning({
   const { t, i18n } = useTranslation();
   const inApp = useRunsInApp();
   const addPhysicalDevice = useHubsStore((s) => s.addPhysicalDevice);
+  const adoptHub = useHubsStore((s) => s.adoptHub);
+  const updatePhysicalDevice = useHubsStore((s) => s.updatePhysicalDevice);
+  // Set when the device runs the phase 2 firmware (answers `identity`): it is claimed with its own
+  // signature instead of the old MQTT claim, and the server creates the hub as part of the claim.
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  const [claimedHub, setClaimedHub] = useState<PhysicalDevice | null>(null);
   const [step, setStep] = useState<Step>("scanning");
   const [found, setFound] = useState<ScannedHub[]>([]);
   const [picked, setPicked] = useState<ScannedHub | null>(null);
@@ -112,9 +127,20 @@ export function BleProvisioning({
       // The advertised name is just the shared product label now — learn the real, unique deviceId
       // via a GATT read right after connecting, before anything else touches the link.
       .then(() => readDeviceId())
-      .then((id) => {
+      .then(async (id) => {
         setDeviceId(id);
-        setStep("wifi");
+        const found = await queryIdentity();
+        if (!found) {
+          // Older firmware: Wi-Fi first, then the MQTT claim (startClaim) as before.
+          setStep("wifi");
+          return;
+        }
+        setIdentity(found);
+        if (!found.claimMode) {
+          setStep("hold-button");
+          return;
+        }
+        await claimOverBle(id, found, device.name);
       })
       .catch((error: unknown) => {
         setErrorMessage(describeBleError(error, t("pairing.connectFailed")));
@@ -140,6 +166,86 @@ export function BleProvisioning({
       });
   }
 
+  /**
+   * Phase 2 claim: the server hands out a nonce, the device signs it with its own key (it must be in
+   * claim mode), and the server creates the hub. Then Wi-Fi if the device has none yet.
+   */
+  async function claimOverBle(
+    id: string,
+    device: DeviceIdentity,
+    advertisedName: string,
+  ) {
+    setStep("verifying");
+    try {
+      let hub = claimedHub?.deviceId === id ? claimedHub : null;
+      if (!hub) {
+        try {
+          const session = await claimsApi.startBle(id);
+          const signature = await signClaimNonce(session.nonce);
+          const created = await claimsApi.completeBle(session.sessionId, {
+            publicKey: device.publicKey,
+            signature,
+            name: device.serial || session.serialCode || advertisedName,
+            roomId,
+            productType: product,
+          });
+          hub = adoptHub(created);
+        } catch (error) {
+          // Already ours (e.g. claimed with its QR label a moment ago): carry on with Wi-Fi.
+          const mine = useHubsStore
+            .getState()
+            .physicalDevices.find((d) => d.deviceId === id);
+          if (
+            !(error instanceof ApiError) ||
+            error.code !== "DEVICE_ALREADY_CLAIMED" ||
+            !mine
+          ) {
+            throw error;
+          }
+          hub = mine;
+        }
+      }
+      setClaimedHub(hub);
+      setName(hub.name);
+      if (device.online) {
+        await sendClaimDone().catch(() => undefined);
+        disconnectFromHub().catch(() => undefined);
+        setStep("name");
+      } else {
+        setStep("wifi");
+      }
+    } catch (error) {
+      if (error instanceof ClaimModeRequiredError) {
+        setStep("hold-button");
+        return;
+      }
+      setErrorMessage(
+        error instanceof ApiError
+          ? describeApiError(error, t("pairing.provisionFailed"))
+          : describeBleError(error, t("pairing.provisionFailed")),
+      );
+      setStep("error");
+    }
+  }
+
+  /** Still connected; the user is now holding the button: ask again. */
+  async function checkClaimModeAgain() {
+    if (!deviceId) return;
+    setStep("verifying");
+    const found = await queryIdentity().catch(() => null);
+    if (!found) {
+      setErrorMessage(t("pairing.connectFailed"));
+      setStep("error");
+      return;
+    }
+    setIdentity(found);
+    if (!found.claimMode) {
+      setStep("hold-button");
+      return;
+    }
+    await claimOverBle(deviceId, found, picked?.name ?? defaultName);
+  }
+
   async function submitWifi() {
     if (!picked || !deviceId) return;
     setWifiError("");
@@ -158,6 +264,13 @@ export function BleProvisioning({
         keepConnected = true;
         setWifiError(result.ack.message || t("pairing.wifiRejected"));
         setStep("wifi");
+        return;
+      }
+
+      if (identity) {
+        // Phase 2 firmware: already claimed over BLE; once on Wi-Fi it fetches its own MQTT
+        // credential by itself (docs/FIRMWARE_INTEGRATION.md, section 6).
+        setStep("name");
         return;
       }
 
@@ -181,7 +294,17 @@ export function BleProvisioning({
   }
 
   async function finish() {
-    if (!deviceId || saving) return;
+    if (saving) return;
+    if (claimedHub) {
+      // The claim already created the hub; only a new name is left to save.
+      const finalName = name.trim() || claimedHub.name;
+      if (finalName !== claimedHub.name) {
+        await updatePhysicalDevice(claimedHub.id, { name: finalName });
+      }
+      onComplete({ ...claimedHub, name: finalName });
+      return;
+    }
+    if (!deviceId) return;
     setSaving(true);
     setSaveError("");
     try {
@@ -275,6 +398,41 @@ export function BleProvisioning({
         >
           {t("pairing.scanAgain")}
         </button>
+      </div>
+    );
+  }
+
+  if (step === "hold-button") {
+    return (
+      <div className="flex flex-col items-center gap-4 pt-10 text-center">
+        <span className="flex size-14 items-center justify-center rounded-full bg-accent text-primary">
+          <Hand className="size-6" />
+        </span>
+        <p className="text-sm font-medium">{t("pairing.holdButtonTitle")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("pairing.holdButtonHint")}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            void checkClaimModeAgain();
+          }}
+          className="mt-2 h-11 w-full rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20"
+        >
+          {t("pairing.checkAgain")}
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "verifying") {
+    return (
+      <div className="flex flex-col items-center gap-4 pt-10 text-center">
+        <Loader2 className="size-10 animate-spin text-primary" />
+        <p className="text-sm font-medium">{t("pairing.verifying")}</p>
+        <p className="text-xs text-muted-foreground">
+          {t("pairing.verifyingHint")}
+        </p>
       </div>
     );
   }

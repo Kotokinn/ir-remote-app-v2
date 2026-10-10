@@ -228,18 +228,7 @@ export async function readDeviceId(): Promise<string> {
     // deviceId as a path segment, so pull it from there instead of failing outright.
     const fromTopic = deviceIdFromTopic(topic);
     if (fromTopic) return fromTopic;
-    // Frames without the id in the topic but in the body (phase 2 "identity|{deviceId,...}").
-    try {
-      const body = JSON.parse(frame.slice(separatorIndex + 1)) as { deviceId?: unknown };
-      if (typeof body.deviceId === "string" && body.deviceId) return body.deviceId;
-    } catch {
-      // not JSON: fall through
-    }
   }
-
-  // Last resort for phase 2 firmware: ask it (frame "identity"). Older firmware doesn't answer.
-  const identity = await queryIdentity().catch(() => null);
-  if (identity) return identity.deviceId;
 
   throw new Error(t("errors.bleDeviceIdMissing"));
 }

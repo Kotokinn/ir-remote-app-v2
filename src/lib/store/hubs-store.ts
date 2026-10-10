@@ -63,6 +63,8 @@ interface HubsState {
   fetchHubs: () => Promise<void>;
   /** Needs the server-assigned id, so — unlike update/remove — it can't be optimistic; rejects on failure. */
   addPhysicalDevice: (device: Omit<PhysicalDevice, "id" | "online">) => Promise<PhysicalDevice>;
+  /** A hub the server already created (a claim made it): just add it to the list. */
+  adoptHub: (hub: HubResponse) => PhysicalDevice;
   /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
   removePhysicalDevice: (id: string) => Promise<void>;
   /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
@@ -114,6 +116,13 @@ export const useHubsStore = create<HubsState>()(
         );
         set((state) => ({ physicalDevices: [...state.physicalDevices, created] }));
         return created;
+      },
+      adoptHub: (hub) => {
+        const adopted = fromResponse(hub);
+        set((state) => ({
+          physicalDevices: [...state.physicalDevices.filter((d) => d.id !== adopted.id), adopted],
+        }));
+        return adopted;
       },
       removePhysicalDevice: (id) => {
         const hub = get().physicalDevices.find((d) => d.id === id);

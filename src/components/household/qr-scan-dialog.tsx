@@ -31,17 +31,24 @@ function describeCameraError(error: unknown, t: TFunction): string {
 }
 
 /**
- * Reads an invite QR with the device's own camera (getUserMedia + jsQR, so the same code runs on
- * desktop and mobile webviews). Calls onCode with the invite code once one is found, then closes.
+ * Reads a QR with the device's own camera (getUserMedia + jsQR, so the same code runs on desktop and
+ * mobile webviews). Calls onCode with what `parse` makes of it (default: an invite code) once a QR it
+ * accepts is found, then closes.
  */
 export function QrScanDialog({
   open,
   onOpenChange,
   onCode,
+  parse = parseInviteCode,
+  title,
+  description,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCode: (code: string) => void;
+  parse?: (text: string) => string | null;
+  title?: string;
+  description?: string;
 }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -51,6 +58,8 @@ export function QrScanDialog({
   onCodeRef.current = onCode;
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
+  const parseRef = useRef(parse);
+  parseRef.current = parse;
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +103,7 @@ export function QrScanDialog({
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           const image = context.getImageData(0, 0, canvas.width, canvas.height);
           const result = jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
-          const code = result ? parseInviteCode(result.data) : null;
+          const code = result ? parseRef.current(result.data) : null;
           if (code) {
             onCodeRef.current(code);
             onOpenChangeRef.current(false);
@@ -121,8 +130,8 @@ export function QrScanDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("qrScan.title")}</DialogTitle>
-          <DialogDescription>{t("qrScan.description")}</DialogDescription>
+          <DialogTitle>{title ?? t("qrScan.title")}</DialogTitle>
+          <DialogDescription>{description ?? t("qrScan.description")}</DialogDescription>
         </DialogHeader>
         {error ? (
           <p className="rounded-xl bg-destructive/10 px-3 py-3 text-sm text-destructive">{error}</p>

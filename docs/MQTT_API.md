@@ -38,12 +38,13 @@ v1/tenants/<tenant>/devices/<profile>/<deviceId>/<phần riêng>
 | `.../events` | device → server | không | Thông báo sự kiện (hiện: firmware mới / tiến trình OTA, xem mục 9) |
 | `.../commands/request/<requestId>` | server → device | không | Server gửi lệnh, `<requestId>` tự đặt để khớp response |
 | `.../commands/response/<requestId>` | device → server | không | Phản hồi lệnh, topic khớp đúng `requestId` vừa gửi |
-| `.../config/set` | server → device | không | Đổi state trực tiếp (không cần request/response) |
 | `.../schedule/set` | server → device | không | Thêm lịch hẹn giờ (xem mục Schedule) |
 | `devices/<profile>/<deviceId>/claim` | device → server | không | Claim thiết bị, gửi tự động lúc connect (nếu bật) |
 | `init` (chỉ qua BLE) | server → device | — | Cấu hình WiFi/timezone lần đầu, chưa cần kết nối WiFi |
 
-Subscribe từ phía thiết bị (server publish vào các topic này để điều khiển): `commands/request/+`, `config/set`, `schedule/set`.
+Subscribe từ phía thiết bị (server publish vào các topic này để điều khiển): `commands/request/+`, `schedule/set`.
+
+> Đã bỏ topic `.../config/set` và các lệnh `setLedMode`/`setLedState`/`setBlinkingInterval` (LED built-in chân này giờ là **heartbeat phần cứng** - nháy theo nhịp `watchdogTask`/`WATCHDOG_KICK_INTERVAL_MS`, không còn điều khiển được qua MQTT/app; LED đứng yên = task đó đang treo).
 
 ---
 
@@ -55,13 +56,11 @@ Publish định kỳ mỗi `TELEMETRY_SEND_INTERVAL_MS` (hiện **5 phút**). Kh
 {
   "deviceName": "A1B2C3D4E5F6",
   "temp": 28.5,
-  "ledMode": 0,
   "rssi": -52
 }
 ```
 
 - `temp`: nhiệt độ tại vị trí đặt hub (°C) đo bằng NTC, `NaN`/`null` nếu chưa đọc được lần nào.
-- `ledMode`: 0 = LED báo hiệu (built-in) sáng cố định, 1 = nháy.
 - `rssi`: cường độ WiFi (dBm).
 
 ## 2. Attributes — `.../attributes`
@@ -79,9 +78,6 @@ Publish (retained) lúc kết nối MQTT và mỗi khi thuộc tính đổi.
   "channel": 6,
   "firmwareVersion": "1.0.0",
   "pendingFirmwareVersion": "",
-  "ledMode": 0,
-  "ledState": false,
-  "blinkingInterval": 1000,
   "sleepModeActive": false
 }
 ```
@@ -99,7 +95,7 @@ Publish (retained) lúc kết nối MQTT và mỗi khi thuộc tính đổi.
 { "deviceName": "A1B2C3D4E5F6", "online": true }
 ```
 
-Mọi dữ liệu vận hành khác (`ledMode`, `rssi`, `temp`...) nằm ở `attributes` / `telemetry`, không nằm trong `state`. Vì `state` retained nên client mới subscribe sẽ nhận ngay trạng thái hiện tại.
+Mọi dữ liệu vận hành khác (`rssi`, `temp`...) nằm ở `attributes` / `telemetry`, không nằm trong `state`. Vì `state` retained nên client mới subscribe sẽ nhận ngay trạng thái hiện tại.
 
 ## 4. Commands — `.../commands/request/<requestId>` → `.../commands/response/<requestId>`
 
@@ -110,9 +106,6 @@ Response chung:
 {
   "success": true,
   "message": "…",
-  "ledMode": 0,
-  "ledState": false,
-  "blinkingInterval": 1000,
   "sleepModeActive": false
 }
 ```
@@ -134,30 +127,6 @@ Xác nhận cập nhật firmware mới mà thiết bị đã báo (mục 9). Th
 ```
 
 Response `success:true` `"Firmware update started"`; `success:false` với `"No firmware update pending"`, `"Version does not match pending update"` hoặc `"Firmware update already in progress"`. Thiết bị tự khởi động lại khi cập nhật xong.
-
-### setLedMode
-
-Đổi mode LED báo hiệu (0 = sáng cố định, 1 = nháy).
-
-```json
-{ "method": "setLedMode", "params": { "mode": 1 } }
-```
-
-### setLedState
-
-Bật/tắt LED báo hiệu ngay (chỉ có tác dụng khi `ledMode = 0`).
-
-```json
-{ "method": "setLedState", "params": { "state": true } }
-```
-
-### setBlinkingInterval
-
-Đổi chu kỳ nháy (ms), hợp lệ trong khoảng 10 - 60000.
-
-```json
-{ "method": "setBlinkingInterval", "params": { "value": 500 } }
-```
 
 ### claim
 
@@ -313,6 +282,8 @@ Tắt còi: `{ "method": "setAlarm", "params": { "mode": "OFF" } }`.
 
 **Nút bấm tại chỗ:** nối 1 nút giữa `STOP_ALARM_BUTTON_PIN` (GPIO 16) và GND (kéo lên nội bộ, nhấn = mức thấp). **1 click = tắt còi ngay** (tương đương gửi `mode: "OFF"`), không cần mạng/MQTT/BLE và không đổi `volume`/`crescendo` đã lưu.
 
+**Giữ nút liên tục 10 giây = factory reset.** Thiết bị xoá toàn bộ NVS namespace `settings` (LED/RGB/buzzer/schedule), `netcfg` (WiFi/timezone) và `tbota` (access token OTA đã cấp), rồi tự `ESP.restart()`. **Không xoá** `PROVISION_DEVICE_KEY`/`PROVISION_DEVICE_SECRET` hay mật khẩu WiFi mặc định — các giá trị này là hằng biên dịch sẵn trong `CONFIG.h`, chưa bao giờ được ghi vào NVS nên không bị ảnh hưởng. Sau reset, thiết bị tự provision lại với ThingsBoard bằng key/secret biên dịch sẵn ở lần boot kế tiếp.
+
 Dùng làm **báo thức hẹn giờ** bằng cách đặt `setAlarm` vào `startAction`/`endAction` của schedule (mục 6).
 
 ### setSchedule / deleteSchedule
@@ -356,7 +327,7 @@ Xoá toàn bộ schedule (cả bản đã lưu trong NVS). Không cần `params`
 
 ### Lưu cấu hình (NVS)
 
-Các cấu hình sau được lưu vào flash và **giữ nguyên sau khi khởi động lại**: `ledMode`, `ledState`, `blinkingInterval`, màu, mode, độ sáng và tốc độ RGB (`setRgbColor`/`setRgbMode`/`setRgbBrightness`/`setRgbSpeed`), `volume`/`crescendo` của buzzer (`setAlarm`), và toàn bộ schedule (mục 6). Trạng thái đang kêu của buzzer không được lưu: khởi động lại là tắt còi. Lưu ngay khi đổi qua command hoặc `config/set`; nạp lại lúc boot. Schedule `repeat=false` đã chạy xong tự bị xoá khỏi NVS; schedule `repeat=true` tồn tại tới khi gọi `clearSchedules`. WiFi/timezone (mục 8) và token OTA vốn đã được lưu riêng.
+Các cấu hình sau được lưu vào flash và **giữ nguyên sau khi khởi động lại**: màu, mode, độ sáng và tốc độ RGB (`setRgbColor`/`setRgbMode`/`setRgbBrightness`/`setRgbSpeed`), `volume`/`crescendo` của buzzer (`setAlarm`), và toàn bộ schedule (mục 6). Trạng thái đang kêu của buzzer không được lưu: khởi động lại là tắt còi. Lưu ngay khi đổi qua command; nạp lại lúc boot. Schedule `repeat=false` đã chạy xong tự bị xoá khỏi NVS; schedule `repeat=true` tồn tại tới khi gọi `clearSchedules`. WiFi/timezone (mục 8) và token OTA vốn đã được lưu riêng.
 
 ### IR nhận thô
 
@@ -364,17 +335,9 @@ Không phải command — thiết bị tự động nhận tín hiệu IR ở `I
 
 ---
 
-## 5. Config — `.../config/set`
+## 5. (đã gỡ bỏ)
 
-Đổi state trực tiếp, không qua request/response, không trả lời riêng (chỉ publish lại `state`/`attributes` nếu có gì đổi). Các field đều optional, gửi field nào đổi field đó:
-
-```json
-{
-  "ledMode": 1,
-  "ledState": true,
-  "blinkingInterval": 500
-}
-```
+Từng là `.../config/set` (`ledMode`/`ledState`/`blinkingInterval`) - xem ghi chú đầu trang "Bảng topic". Giữ lại số mục để các tham chiếu "mục N" khác trong tài liệu này không lệch.
 
 ## 6. Schedule — `.../schedule/set`
 
@@ -503,18 +466,18 @@ Cả chiều gửi và nhận đều dùng **1 chuỗi text UTF-8** duy nhất, 
 <topic>|<payload_json>
 ```
 
-Ký tự `|` đầu tiên là dấu phân tách; phần trước là topic (giống hệt topic MQTT ở các mục trên, hoặc `init`/`config/set`-style ngắn tuỳ ngữ cảnh), phần sau là JSON payload nguyên văn.
+Ký tự `|` đầu tiên là dấu phân tách; phần trước là topic (giống hệt topic MQTT ở các mục trên, hoặc `init`-style ngắn tuỳ ngữ cảnh), phần sau là JSON payload nguyên văn.
 
-Ví dụ app gửi lệnh bật LED báo hiệu (tương đương publish MQTT vào `.../commands/request/<requestId>`):
+Ví dụ app gửi lệnh tắt còi báo thức (tương đương publish MQTT vào `.../commands/request/<requestId>`):
 
 ```
-v1/tenants/tenant-001/devices/SmartIrHub/A1B2C3D4E5F6/commands/request/req-1|{"method":"setLedState","params":{"state":true}}
+v1/tenants/tenant-001/devices/SmartIrHub/A1B2C3D4E5F6/commands/request/req-1|{"method":"setAlarm","params":{"mode":"OFF"}}
 ```
 
 Ví dụ thiết bị notify xuống telemetry:
 
 ```
-v1/tenants/tenant-001/devices/SmartIrHub/A1B2C3D4E5F6/telemetry|{"deviceName":"A1B2C3D4E5F6","temp":28.5,"ledMode":0}
+v1/tenants/tenant-001/devices/SmartIrHub/A1B2C3D4E5F6/telemetry|{"deviceName":"A1B2C3D4E5F6","temp":28.5,"rssi":-52}
 ```
 
 Ví dụ cấu hình WiFi lần đầu (topic ngắn `init`, xem mục 8):
@@ -525,7 +488,7 @@ init|{"ssid":"Ten_WiFi","ssid_pass":"matkhau","time_zone":"Asia/Ho_Chi_Minh"}
 
 ### Giới hạn cần biết
 
-- Chưa có cơ chế fragment nhiều gói ATT — payload dài (vài trăm byte, ví dụ `attributes` đầy đủ field) có thể bị cắt cụt nếu vượt quá MTU thương lượng thực tế. Ưu tiên dùng BLE cho payload ngắn (`command`, `config/set`, `schedule/set`, `init`); dữ liệu nặng nên đọc qua MQTT khi có WiFi.
+- Chưa có cơ chế fragment nhiều gói ATT — payload dài (vài trăm byte, ví dụ `attributes` đầy đủ field) có thể bị cắt cụt nếu vượt quá MTU thương lượng thực tế. Ưu tiên dùng BLE cho payload ngắn (`command`, `schedule/set`, `init`); dữ liệu nặng nên đọc qua MQTT khi có WiFi.
 - Không có xác thực/mã hoá ở tầng ứng dụng — bảo mật dựa vào BLE pairing/bonding (nếu bật) của platform, không phải cơ chế riêng của firmware.
 - Số kết nối BLE đồng thời tối đa theo cấu hình mặc định của NimBLE-Arduino (không giới hạn thêm ở tầng ứng dụng firmware).
 

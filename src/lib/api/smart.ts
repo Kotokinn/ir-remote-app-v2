@@ -166,6 +166,26 @@ export const hubsApi = {
   remove: (id: number) => apiDelete<void>(`/api/smart/hubs/${id}`),
 };
 
+/** "Add device" by claiming the physical device: over BLE (it signs a nonce) or with its QR label. */
+export interface BleClaimSession {
+  sessionId: string;
+  /** Handed to the device as is (frame claim/sign). */
+  nonce: string;
+  expiresAt: string;
+  serialCode: string | null;
+  profile: string;
+}
+
+export const claimsApi = {
+  startBle: (deviceId: string) => apiPost<BleClaimSession>("/api/smart/claims/ble", { deviceId }),
+  completeBle: (
+    sessionId: string,
+    data: { publicKey: string; signature: string; name: string; roomId?: string; productType: string },
+  ) => apiPost<HubResponse>(`/api/smart/claims/ble/${encodeURIComponent(sessionId)}/complete`, data),
+  claimQr: (data: { serial: string; code: string; name: string; roomId?: string; productType: string }) =>
+    apiPost<HubResponse>("/api/smart/claims/qr", data),
+};
+
 export const devicesApi = {
   list: () => apiGet<DeviceResponse[]>("/api/smart/devices"),
   create: (data: Record<string, unknown>) => apiPost<DeviceResponse>("/api/smart/devices", data),
