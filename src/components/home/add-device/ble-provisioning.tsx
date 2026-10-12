@@ -185,7 +185,10 @@ export function BleProvisioning({
           const created = await claimsApi.completeBle(session.sessionId, {
             publicKey: device.publicKey,
             signature,
-            name: device.serial || session.serialCode || advertisedName,
+            name:
+              device.serial !== ""
+                ? device.serial
+                : (session.serialCode ?? advertisedName),
             roomId,
             productType: product,
           });
