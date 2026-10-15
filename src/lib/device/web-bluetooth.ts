@@ -26,6 +26,35 @@ export function isWebBluetoothSupported(): boolean {
 /** Devices granted in this page session, keyed by the name the hub advertises (just the shared product
  * label now, e.g. "SmartIrHub" — not a deviceId; resolveDevice() falls back to matching by `.id`). */
 const knownDevices = new Map<string, BluetoothDevice>();
+
+/**
+ * The real deviceId (12-hex eFuse MAC, used everywhere else in the app) has no relation to the
+ * browser's own opaque BluetoothDevice.id — the only thing resolveDevice() can look up by. Callers
+ * elsewhere (ble-transport.ts) only know the real deviceId when they need to reconnect, with no scan
+ * in between to relearn it, so persist the pairing-time mapping across reloads (localStorage — a
+ * granted device's `.id` is stable for this origin per the Web Bluetooth spec).
+ */
+const DEVICE_ID_MAP_STORAGE_KEY = "irremote:ble-device-id-map";
+
+function loadDeviceIdMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DEVICE_ID_MAP_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Call once the real deviceId is known (right after readDeviceId() during pairing). */
+export function rememberDeviceId(realDeviceId: string, browserAddress: string): void {
+  try {
+    const map = loadDeviceIdMap();
+    map[realDeviceId] = browserAddress;
+    localStorage.setItem(DEVICE_ID_MAP_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // localStorage unavailable (private mode, blocked) - mapping just won't survive a reload.
+  }
+}
 let current: {
   device: BluetoothDevice;
   characteristic: BluetoothRemoteGATTCharacteristic;
@@ -90,7 +119,10 @@ export async function connect(
   nameOrAddress: string,
   onDisconnect?: () => void,
 ): Promise<void> {
-  const device = await resolveDevice(nameOrAddress);
+  // Translate a real deviceId back to the browser's own address first, if one was recorded for it
+  // (see rememberDeviceId) — a no-op when nameOrAddress is already a browser address/name (pairing).
+  const target = loadDeviceIdMap()[nameOrAddress] ?? nameOrAddress;
+  const device = await resolveDevice(target);
   if (current?.device === device && device.gatt?.connected) return;
   if (current) disconnect();
 

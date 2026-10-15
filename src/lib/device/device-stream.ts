@@ -1,18 +1,121 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { API_BASE_URL } from "@/lib/api/config";
 import { startClaim } from "@/lib/api/mqtt";
 import { runsInApp } from "@/lib/platform";
 import { startSse } from "@/lib/sse";
-import { API_BASE_URL } from "@/lib/api/config";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDeviceStateStore } from "@/lib/store/device-state-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
-import { useOtaStore, type OtaEventType } from "@/lib/store/ota-store";
+import {
+  type OtaEvent,
+  type OtaEventType,
+  useOtaStore,
+} from "@/lib/store/ota-store";
 
-const OTA_EVENT_TYPES: readonly OtaEventType[] = ["firmwareAvailable", "otaStarted", "otaSuccess", "otaFailed"];
+const OTA_EVENT_TYPES: readonly OtaEventType[] = [
+  "firmwareAvailable",
+  "otaStarted",
+  "otaSuccess",
+  "otaFailed",
+];
 
-function isOtaEventType(value: unknown): value is OtaEventType {
-  return typeof value === "string" && (OTA_EVENT_TYPES as readonly string[]).includes(value);
+/**
+ * hub-ir sends camelCase ("firmwareAvailable", "otaStarted"), smart-control dotted ("firmware.available",
+ * "ota.started"): both mean the same four events.
+ */
+function toOtaEventType(value: unknown): OtaEventType | null {
+  if (typeof value !== "string") return null;
+  const camel = value
+    .trim()
+    .replace(/[._-]+([a-zA-Z0-9])/g, (_, letter: string) =>
+      letter.toUpperCase(),
+    );
+  return (OTA_EVENT_TYPES as readonly string[]).includes(camel)
+    ? (camel as OtaEventType)
+    : null;
+}
+
+/**
+ * Firmware that updates itself (updatingFirmwareVersion: the version being installed, "" otherwise): nothing to
+ * confirm, the banner only shows progress. The retained attributes cover what a live event would have said when
+ * the app wasn't watching: still installing, or (after the reboot) now running the new version.
+ */
+function syncAutoUpdateFromAttributes(
+  deviceId: string,
+  attributes: Record<string, unknown>,
+): void {
+  const ota = useOtaStore.getState();
+  const updating =
+    typeof attributes.updatingFirmwareVersion === "string"
+      ? attributes.updatingFirmwareVersion.trim()
+      : "";
+  const current =
+    typeof attributes.firmwareVersion === "string"
+      ? attributes.firmwareVersion
+      : "";
+  const existing = ota.events[deviceId] as OtaEvent | undefined;
+
+  if (updating && updating !== current) {
+    if (existing?.type === "otaStarted" && existing.newVersion === updating)
+      return;
+    ota.setEvent(deviceId, {
+      type: "otaStarted",
+      currentVersion: current,
+      newVersion: updating,
+      title: existing?.title ?? "",
+    });
+    return;
+  }
+  if (existing?.type !== "otaStarted") return;
+  if (current === existing.newVersion) {
+    ota.setEvent(deviceId, { ...existing, type: "otaSuccess" });
+  } else {
+    // No longer installing and not on the new version: the otaFailed event was missed.
+    ota.setEvent(deviceId, { ...existing, type: "otaFailed" });
+  }
+}
+
+/**
+ * Older firmware that asks first. The offer to update, from the retained attributes (pendingFirmwareVersion):
+ * mqtt-service replays those to every new stream, whereas the firmwareAvailable event is only seen by an app
+ * watching at that moment (and the firmware repeats it only every few hours). So the prompt is there whenever the
+ * app opens while an update is pending, and goes away once nothing is pending any more. A version the user closed
+ * stays closed.
+ */
+function syncOfferFromAttributes(
+  deviceId: string,
+  attributes: Record<string, unknown>,
+): void {
+  if ("updatingFirmwareVersion" in attributes) {
+    syncAutoUpdateFromAttributes(deviceId, attributes);
+    return;
+  }
+  if (!("pendingFirmwareVersion" in attributes)) return;
+  const ota = useOtaStore.getState();
+  const pending =
+    typeof attributes.pendingFirmwareVersion === "string"
+      ? attributes.pendingFirmwareVersion.trim()
+      : "";
+  const current =
+    typeof attributes.firmwareVersion === "string"
+      ? attributes.firmwareVersion
+      : "";
+  const existing = ota.events[deviceId] as OtaEvent | undefined;
+
+  if (!pending || pending === current) {
+    if (existing?.type === "firmwareAvailable") ota.dismiss(deviceId);
+    return;
+  }
+  if (ota.dismissedVersions[deviceId] === pending) return;
+  // Already offered, or a live progress state for this version (installing / done / failed) says more.
+  if (existing && existing.newVersion === pending) return;
+  ota.setEvent(deviceId, {
+    type: "firmwareAvailable",
+    currentVersion: current,
+    newVersion: pending,
+    title: existing?.title ?? "",
+  });
 }
 
 interface DeviceEventPayload {
@@ -38,7 +141,9 @@ function reclaimAndReconnect(deviceId: string): void {
   if (now - (lastReclaimAt.get(deviceId) ?? 0) < RECLAIM_COOLDOWN_MS) return;
   lastReclaimAt.set(deviceId, now);
 
-  const hub = useHubsStore.getState().physicalDevices.find((device) => device.deviceId === deviceId);
+  const hub = useHubsStore
+    .getState()
+    .physicalDevices.find((device) => device.deviceId === deviceId);
   startClaim(deviceId, hub?.name ?? deviceId)
     .then(() => startDeviceStream(deviceId))
     .catch((error: unknown) => {
@@ -78,28 +183,39 @@ function applyEvent(deviceId: string, payload: DeviceEventPayload) {
       break;
     case "attributes":
       store.setAttributes(deviceId, parsed as Record<string, unknown>);
+      syncOfferFromAttributes(deviceId, parsed as Record<string, unknown>);
       break;
     case "command-response":
       store.pushCommandResponse(deviceId, parsed as Record<string, unknown>);
       break;
     case "broker":
-      store.setBroker(deviceId, (parsed as Record<string, unknown>).connected === true);
+      store.setBroker(
+        deviceId,
+        (parsed as Record<string, unknown>).connected === true,
+      );
       break;
     case "events": {
-      // smart-control's publishOtaEvent() (main.cpp): {type, currentVersion, newVersion, title}.
+      // publishOtaEvent() in both firmwares (main.cpp): {type, currentVersion, newVersion, title}.
       const event = parsed as Record<string, unknown>;
+      const type = toOtaEventType(event.type);
       if (
-        isOtaEventType(event.type) &&
+        type &&
         typeof event.currentVersion === "string" &&
-        typeof event.newVersion === "string" &&
-        typeof event.title === "string"
+        typeof event.newVersion === "string"
       ) {
-        useOtaStore.getState().setEvent(deviceId, {
-          type: event.type,
-          currentVersion: event.currentVersion,
-          newVersion: event.newVersion,
-          title: event.title,
-        });
+        const ota = useOtaStore.getState();
+        // An offer the user already closed isn't pushed at them again when the firmware repeats it.
+        if (
+          type !== "firmwareAvailable" ||
+          ota.dismissedVersions[deviceId] !== event.newVersion
+        ) {
+          ota.setEvent(deviceId, {
+            type,
+            currentVersion: event.currentVersion,
+            newVersion: event.newVersion,
+            title: typeof event.title === "string" ? event.title : "",
+          });
+        }
       }
       break;
     }
@@ -126,8 +242,8 @@ export async function startDeviceStream(deviceId: string): Promise<void> {
         () => useAuthStore.getState().accessToken,
         (event) => {
           applyEvent(deviceId, event);
-        }
-      )
+        },
+      ),
     );
     return;
   }
@@ -138,7 +254,11 @@ export async function startDeviceStream(deviceId: string): Promise<void> {
   });
   activeUnlisten.set(deviceId, unlisten);
 
-  await invoke("device_stream_start", { deviceId, baseUrl: API_BASE_URL, token });
+  await invoke("device_stream_start", {
+    deviceId,
+    baseUrl: API_BASE_URL,
+    token,
+  });
 }
 
 export async function stopDeviceStream(deviceId: string): Promise<void> {

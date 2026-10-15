@@ -77,12 +77,12 @@ Publish (retained) lúc kết nối MQTT và mỗi khi thuộc tính đổi.
   "bssid": "11:22:33:44:55:66",
   "channel": 6,
   "firmwareVersion": "1.0.0",
-  "pendingFirmwareVersion": "",
+  "updatingFirmwareVersion": "",
   "sleepModeActive": false
 }
 ```
 
-`pendingFirmwareVersion`: phiên bản firmware mới đang **chờ xác nhận cập nhật** (mục 9), chuỗi rỗng nếu không có.
+`updatingFirmwareVersion`: phiên bản firmware **đang được cài** (mục 9), chuỗi rỗng khi không cập nhật.
 
 ## 3. State — `.../state` (presence)
 
@@ -120,13 +120,13 @@ Không cần `params`. Trả về `success:true` cùng state hiện tại (khôn
 
 ### confirmOtaUpdate
 
-Xác nhận cập nhật firmware mới mà thiết bị đã báo (mục 9). Thiết bị chỉ tải và cập nhật sau lệnh này. `params.version` là tuỳ chọn: nếu có, phải khớp `pendingFirmwareVersion` (tránh xác nhận nhầm bản cũ).
+Thiết bị tự cập nhật (mục 9); lệnh này chỉ yêu cầu **kiểm tra và cài ngay** thay vì đợi chu kỳ 5 giờ, kể cả bản đã cài lỗi `OTA_MAX_ATTEMPTS` lần. `params.version` (app cũ gửi) được bỏ qua.
 
 ```json
-{ "method": "confirmOtaUpdate", "params": { "version": "1.1.0" } }
+{ "method": "confirmOtaUpdate" }
 ```
 
-Response `success:true` `"Firmware update started"`; `success:false` với `"No firmware update pending"`, `"Version does not match pending update"` hoặc `"Firmware update already in progress"`. Thiết bị tự khởi động lại khi cập nhật xong.
+Response `success:true` `"Checking for firmware update"`; `success:false` với `"Firmware update already in progress"` hoặc `"Firmware update is disabled"`. Không có bản mới hơn thì không có gì xảy ra.
 
 ### claim
 
@@ -160,6 +160,13 @@ Build lệnh AC qua `IR_UNIVERSAL_ENGINE` rồi phát IR. **Device chỉ gửi �
 - `mode`: 0=auto, 1=cool, 2=heat, 3=dry, 4=fan
 - `fan`: 0=auto, 1=low, 2=medium, 3=high, 4=min, 5=max
 - `swing`: 0=off, 1=auto, 2=highest, 3=high, 4=middle, 5=low, 6=lowest, 7=upperMiddle
+
+**Giữ nhiệt độ (tự động, không cần tham số riêng):** mọi `sendAc` có `power:true` khởi động một phiên
+bù trừ nền — giữ nguyên lệnh vừa gửi trong 30 phút đầu, sau đó dùng `roomTemperatureC` (cảm biến của
+hub) so với `temp` đã đặt: lệch quá 0.5°C thì tự ±1°C rồi phát lại IR, lặp lại mỗi 30 giây có số đo
+mới, không giới hạn thời gian. Dừng khi gửi `sendAc` khác (kể cả `power:false`) hoặc bật `setSleepMode`
+(mục Sleep mode tự có cơ chế bù trừ riêng, không chạy song song với cơ chế này). Không có tham số bật/tắt
+— mọi lệnh AC bật máy đều tự áp dụng.
 
 Protocol hợp lệ theo hãng (thứ tự gợi ý để app thử lần lượt; chỉ gồm protocol IRac build được):
 
@@ -225,13 +232,22 @@ Ghi chú:
 
 ### setRgbMode
 
-Đổi hiệu ứng dải LED RGB.
+Đổi hiệu ứng dải LED RGB, và tuỳ chọn bật/tắt "màu theo nhiệt độ" cho hiệu ứng đó.
 
 ```json
-{ "method": "setRgbMode", "params": { "mode": 6 } }
+{ "method": "setRgbMode", "params": { "mode": 6, "autoTempColor": true } }
 ```
 
 `mode` (0-11): `0`=OFF, `1`=STATIC, `2`=ROTATING, `3`=BREATHING, `4`=WAVE, `5`=RAINBOW, `6`=STROBE, `7`=SPARKLE, `8`=CONFETTI, `9`=POLICE, `10`=COLOR_WIPE, `11`=FIRE.
+
+`autoTempColor` (bool, optional — không gửi thì giữ nguyên giá trị đang lưu): **cờ riêng, kết hợp được
+với bất kỳ `mode` nào** (không còn là 1 mode riêng như trước). Bật thì hiệu ứng `mode` ở trên chạy bằng
+màu tính theo `roomTemperatureC` (NTC) thay vì màu đã đặt qua `setRgbColor` — `< 24°C` xanh dương
+(thấp), `24-27°C` vàng hổ phách (vừa), `> 27°C` đỏ (cao) — kèm nháy trắng 2 lần khi gửi lệnh IR, nháy
+tím 2 lần khi nhận/forward IR ngoài, rồi tự quay lại màu nhiệt độ. Tắt thì `mode` chạy bình thường bằng
+màu đã đặt, sự kiện IR không còn làm đổi màu LED. Ví dụ: `mode=3` (BREATHING) + `autoTempColor=true` =
+hiệu ứng thở nhưng màu tự đổi theo nhiệt độ phòng; cùng `mode=3` với `autoTempColor=false` = thở bằng
+màu cố định như trước đây.
 
 ### setRgbBrightness
 
@@ -411,25 +427,26 @@ Dùng khi thiết bị **chưa có WiFi** — cấu hình lần đầu qua BLE t
 
 ---
 
-## 9. Events / OTA có xác nhận — `.../events`
+## 9. Events / OTA tự động — `.../events`
 
-Thiết bị kiểm tra ThingsBoard mỗi 5 giờ (và ngay sau khi boot). Khi thấy phiên bản khác `firmwareVersion` hiện tại, thiết bị **không tự cập nhật** mà:
+Thiết bị kiểm tra ThingsBoard ngay sau khi boot và mỗi 5 giờ (`TB_OTA_CHECK_INTERVAL_MS`). Khi phiên bản trên server **mới hơn** `firmwareVersion` (so theo số `major.minor.patch`; bằng hoặc cũ hơn thì bỏ qua — không bao giờ hạ cấp), thiết bị **tự cập nhật ngay**, không cần xác nhận:
 
-1. Publish một event `firmwareAvailable` lên `.../events` (mỗi phiên bản chỉ báo 1 lần; nếu lúc đó chưa gửi được thì thử lại sau 30 giây) và cập nhật attributes với `pendingFirmwareVersion`.
-2. Chờ command `confirmOtaUpdate` (mục 4). Chưa xác nhận thì thiết bị giữ nguyên firmware đang chạy.
-3. Sau khi xác nhận: tải, ghi flash, rồi khởi động lại. Nếu tải/ghi lỗi, bản mới vẫn ở trạng thái chờ (`pendingFirmwareVersion` giữ nguyên) và có thể gửi `confirmOtaUpdate` lại.
+1. Đặt `updatingFirmwareVersion` trong attributes, publish event `otaStarted`.
+2. Tải, ghi flash, khởi động lại. Trước khi tải, thiết bị lưu "đang cập nhật từ X lên Y" vào NVS.
+3. Sau khi khởi động lại, ngay khi MQTT nối được: bản đang chạy là Y thì publish `otaSuccess`, còn là X (tải hỏng, mất điện, bootloader quay về bản cũ) thì publish `otaFailed`; rồi xoá bản ghi NVS. Chưa gửi được thì thử lại mỗi 30 giây.
+4. Lỗi khi tải/ghi (không khởi động lại): publish `otaFailed`, `updatingFirmwareVersion` về rỗng, thử lại ở lần kiểm tra sau. Mỗi phiên bản thử tối đa `OTA_MAX_ATTEMPTS` (3) lần rồi chờ bản mới hơn; lệnh `confirmOtaUpdate` (mục 4) cho thử lại ngay.
 
 ```json
 {
   "deviceName": "A1B2C3D4E5F6",
-  "type": "firmwareAvailable",
+  "type": "otaSuccess",
   "currentVersion": "1.0.0",
   "newVersion": "1.1.0",
   "title": "hub-ir"
 }
 ```
 
-`type`: `firmwareAvailable` (có bản mới, chờ xác nhận) · `otaStarted` (đã xác nhận, bắt đầu tải) · `otaSuccess` (ghi xong, sắp khởi động lại) · `otaFailed` (lỗi, vẫn chờ). Cấu trúc payload giống nhau ở cả bốn loại. Sau khi khởi động lại, `firmwareVersion` trong attributes là phiên bản mới và `pendingFirmwareVersion` rỗng.
+`type`: `otaStarted` (bắt đầu tải) · `otaSuccess` (đã chạy bản mới, gửi sau khi khởi động lại) · `otaFailed` (không cài được, vẫn chạy bản cũ). `currentVersion` = bản trước khi cập nhật, `newVersion` = bản được cài; cấu trúc giống nhau ở cả ba loại. Sau khi cập nhật, `firmwareVersion` trong attributes là phiên bản mới — smart-remote-iot dựa vào đó gửi thông báo "đã cập nhật" (in-app + push), và `otaFailed` thành thông báo lỗi.
 
 Đèn RGB báo trạng thái khi cập nhật: xanh dương nháy = đang cập nhật, xanh lá nháy = thành công, đỏ nháy = lỗi.
 
@@ -496,6 +513,6 @@ init|{"ssid":"Ten_WiFi","ssid_pass":"matkhau","time_zone":"Asia/Ho_Chi_Minh"}
 
 - Mọi payload JSON phải nhỏ hơn `MQTT_BUFFER_SIZE` (1024 byte).
 - `deviceId` cố định theo phần cứng (eFuse MAC), không đổi giữa các lần boot — dùng để build topic ở client.
-- Thông báo và xác nhận OTA đi qua `.../events` + `confirmOtaUpdate` (mục 9). Riêng việc dò/tải firmware từ ThingsBoard dùng HTTPS qua `TB_HTTP_HOST` (`POST /api/tb/provision`, `GET /api/tb/{token}/attributes`, `GET /api/tb/{token}/firmware`), xem code `provisionDeviceToken()`/`fetchLatestFirmwareInfo()`/`downloadAndApplyFirmware()` trong `src/main.cpp`. 3 request này dùng `WiFiClientSecure::setInsecure()` (bỏ xác thực chứng chỉ server) — cần thiết vì ESP32 không đủ heap để verify-full khi không pin CA cert thật; chấp nhận đánh đổi vì payload chỉ là provisioning token/firmware, không phải dữ liệu nhạy cảm.
+- OTA tự động, kết quả báo qua `.../events` (mục 9); `confirmOtaUpdate` chỉ để kiểm tra/cài ngay. Riêng việc dò/tải firmware từ ThingsBoard dùng HTTPS qua `TB_HTTP_HOST` (`POST /api/tb/provision`, `GET /api/tb/{token}/attributes`, `GET /api/tb/{token}/firmware`), xem code `provisionDeviceToken()`/`fetchLatestFirmwareInfo()`/`downloadAndApplyFirmware()` trong `src/main.cpp`. 3 request này dùng `WiFiClientSecure::setInsecure()` (bỏ xác thực chứng chỉ server) — cần thiết vì ESP32 không đủ heap để verify-full khi không pin CA cert thật; chấp nhận đánh đổi vì payload chỉ là provisioning token/firmware, không phải dữ liệu nhạy cảm.
 - `setInsecure()` vẫn không tránh được mbedTLS phải cấp phát heap để parse chứng chỉ/tính BIGNUM (RSA) lúc handshake. NimBLE chiếm khoảng 40KB heap khi đang chạy — đo thực tế có BLE thì chỉ còn ~58KB free/~50KB liền khối, không đủ (`BIGNUM - Memory allocation failed`); tắt hẳn BLE thì dư (~98KB).
 - Chỉ `downloadAndApplyFirmware()` tắt tạm BLE (`NimBLEDevice::deinit`) trước khi gọi HTTPS rồi bật lại ngay sau, và cũng chỉ khi không có client BLE nào đang kết nối (`bleTransport.isConnected() == false`). `provisionDeviceToken()`/`fetchLatestFirmwareInfo()` **không đụng BLE** — dù `isConnected()==false` cũng không đủ để tắt an toàn cho 2 hàm này: `provisionDeviceToken()` bị gọi lại mỗi 30 giây khi chưa có token và giữ BLE tắt suốt cả lúc gọi HTTPS (vài giây/lần chứ không phải tức thời), nên dễ trúng đúng lúc app đang **gửi yêu cầu kết nối** (`isConnected()` vẫn đọc `false` ở bước này — chỉ báo "đã kết nối xong", không báo "đang kết nối") — NimBLE bị deinit giữa lúc đó khiến yêu cầu bị hủy (`request canceled`), y hệt bug đã gặp hai lần. Vì vậy 2 hàm này thiếu heap thì cứ fail, tự retry ở lần sau; chỉ hàm tải firmware (hiếm, do app xác nhận, không lặp theo chu kỳ) mới đánh đổi tắt BLE.

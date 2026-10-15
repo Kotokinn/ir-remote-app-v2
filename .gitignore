@@ -53,3 +53,4 @@ client_secret_*.json
 /backup.txt
 /note.txt
 /tb.txt
+.andromity/

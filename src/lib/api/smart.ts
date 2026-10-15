@@ -13,6 +13,7 @@ export interface ScenePatch {
   color?: string;
   effect?: string;
   effectSpeed?: number;
+  autoTempColor?: boolean;
 }
 
 export interface SceneActionData {
@@ -125,7 +126,12 @@ export interface InviteResponse {
   code: string;
   expiresAt: string;
   /** What the code actually covers — the server drops a device already inside a room being shared whole. */
-  targets: Array<{ scope: ShareScope; roomId: string | null; deviceId: number | null; name: string }>;
+  targets: Array<{
+    scope: ShareScope;
+    roomId: string | null;
+    deviceId: number | null;
+    name: string;
+  }>;
 }
 
 export interface ShareResponse {
@@ -153,15 +159,25 @@ export interface SharesResponse {
  * "clear it") would silently never reach the server; the PATCH endpoints clear on an explicit null.
  */
 export function toWirePatch(patch: object): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === undefined ? null : value]));
+  return Object.fromEntries(
+    Object.entries(patch).map(([key, value]) => [
+      key,
+      value === undefined ? null : value,
+    ]),
+  );
 }
 
 export const hubsApi = {
   list: () => apiGet<HubResponse[]>("/api/smart/hubs"),
-  create: (data: { name: string; roomId?: string; productType: string; deviceId?: string }) =>
-    apiPost<HubResponse>("/api/smart/hubs", data),
+  create: (data: {
+    name: string;
+    roomId?: string;
+    productType: string;
+    deviceId?: string;
+  }) => apiPost<HubResponse>("/api/smart/hubs", data),
   /** Only the keys present are changed; a null value clears that field. */
-  patch: (id: number, patch: Record<string, unknown>) => apiPatch<HubResponse>(`/api/smart/hubs/${id}`, patch),
+  patch: (id: number, patch: Record<string, unknown>) =>
+    apiPatch<HubResponse>(`/api/smart/hubs/${id}`, patch),
   /** Also deletes every device derived from the hub. */
   remove: (id: number) => apiDelete<void>(`/api/smart/hubs/${id}`),
 };
@@ -177,18 +193,35 @@ export interface BleClaimSession {
 }
 
 export const claimsApi = {
-  startBle: (deviceId: string) => apiPost<BleClaimSession>("/api/smart/claims/ble", { deviceId }),
+  startBle: (deviceId: string) =>
+    apiPost<BleClaimSession>("/api/smart/claims/ble", { deviceId }),
   completeBle: (
     sessionId: string,
-    data: { publicKey: string; signature: string; name: string; roomId?: string; productType: string },
-  ) => apiPost<HubResponse>(`/api/smart/claims/ble/${encodeURIComponent(sessionId)}/complete`, data),
-  claimQr: (data: { serial: string; code: string; name: string; roomId?: string; productType: string }) =>
-    apiPost<HubResponse>("/api/smart/claims/qr", data),
+    data: {
+      publicKey: string;
+      signature: string;
+      name: string;
+      roomId?: string;
+      productType: string;
+    },
+  ) =>
+    apiPost<HubResponse>(
+      `/api/smart/claims/ble/${encodeURIComponent(sessionId)}/complete`,
+      data,
+    ),
+  claimQr: (data: {
+    serial: string;
+    code: string;
+    name: string;
+    roomId?: string;
+    productType: string;
+  }) => apiPost<HubResponse>("/api/smart/claims/qr", data),
 };
 
 export const devicesApi = {
   list: () => apiGet<DeviceResponse[]>("/api/smart/devices"),
-  create: (data: Record<string, unknown>) => apiPost<DeviceResponse>("/api/smart/devices", data),
+  create: (data: Record<string, unknown>) =>
+    apiPost<DeviceResponse>("/api/smart/devices", data),
   /** Only the keys present are changed; a null value clears that field. */
   patch: (id: number, patch: Record<string, unknown>) =>
     apiPatch<DeviceResponse>(`/api/smart/devices/${id}`, patch),
@@ -198,9 +231,11 @@ export const devicesApi = {
 export const sharesApi = {
   list: () => apiGet<SharesResponse>("/api/smart/shares"),
   /** Only the owner of every listed room/device can invite to them. One single-use, expiring code covers all of them. */
-  createInvite: (targets: InviteTarget[]) => apiPost<InviteResponse>("/api/smart/shares/invites", { targets }),
+  createInvite: (targets: InviteTarget[]) =>
+    apiPost<InviteResponse>("/api/smart/shares/invites", { targets }),
   /** One share per target the code carried. */
-  redeem: (code: string) => apiPost<ShareResponse[]>("/api/smart/shares/redeem", { code }),
+  redeem: (code: string) =>
+    apiPost<ShareResponse[]>("/api/smart/shares/redeem", { code }),
   /** The owner revokes, or the member leaves. */
   remove: (id: number) => apiDelete<void>(`/api/smart/shares/${id}`),
 };
@@ -232,30 +267,43 @@ export interface ScheduleBody {
 // and sent later: every write is an idempotent PUT/DELETE that is safe to repeat (see sync/sync-engine).
 export const scenesApi = {
   list: () => apiGet<SceneResponse[]>("/api/smart/scenes"),
-  get: (id: string) => apiGet<SceneResponse>(`/api/smart/scenes/${encodeURIComponent(id)}`),
+  get: (id: string) =>
+    apiGet<SceneResponse>(`/api/smart/scenes/${encodeURIComponent(id)}`),
   /** Create-or-replace. */
   upsert: (id: string, data: SceneBody) =>
     apiPut<SceneResponse>(`/api/smart/scenes/${encodeURIComponent(id)}`, data),
   /** Deleting one that is already gone succeeds. */
-  remove: (id: string) => apiDelete<void>(`/api/smart/scenes/${encodeURIComponent(id)}`),
+  remove: (id: string) =>
+    apiDelete<void>(`/api/smart/scenes/${encodeURIComponent(id)}`),
   activate: (id: string) =>
-    apiPost<SceneActivationResponse>(`/api/smart/scenes/${encodeURIComponent(id)}/activate`),
+    apiPost<SceneActivationResponse>(
+      `/api/smart/scenes/${encodeURIComponent(id)}/activate`,
+    ),
 };
 
 export const schedulesApi = {
   list: () => apiGet<ScheduleResponse[]>("/api/smart/schedules"),
-  get: (id: string) => apiGet<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}`),
+  get: (id: string) =>
+    apiGet<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}`),
   /** Create-or-replace. Its scene must already exist on the server (400 otherwise). */
   upsert: (id: string, data: ScheduleBody) =>
-    apiPut<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}`, data),
+    apiPut<ScheduleResponse>(
+      `/api/smart/schedules/${encodeURIComponent(id)}`,
+      data,
+    ),
   /** Deleting one that is already gone succeeds. */
-  remove: (id: string) => apiDelete<void>(`/api/smart/schedules/${encodeURIComponent(id)}`),
+  remove: (id: string) =>
+    apiDelete<void>(`/api/smart/schedules/${encodeURIComponent(id)}`),
   setEnabled: (id: string, enabled: boolean) =>
-    apiPatch<ScheduleResponse>(`/api/smart/schedules/${encodeURIComponent(id)}/enabled`, { enabled }),
+    apiPatch<ScheduleResponse>(
+      `/api/smart/schedules/${encodeURIComponent(id)}/enabled`,
+      { enabled },
+    ),
 };
 
 export const notificationsApi = {
   list: () => apiGet<NotificationResponse[]>("/api/smart/notifications"),
-  markRead: (id: number) => apiPatch<NotificationResponse>(`/api/smart/notifications/${id}/read`, {}),
+  markRead: (id: number) =>
+    apiPatch<NotificationResponse>(`/api/smart/notifications/${id}/read`, {}),
   remove: (id: number) => apiDelete<void>(`/api/smart/notifications/${id}`),
 };

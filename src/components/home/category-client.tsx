@@ -499,6 +499,7 @@ export function CategoryClient({
                 color={selectedDevice.color}
                 effect={selectedDevice.effect}
                 effectSpeed={selectedDevice.effectSpeed}
+                autoTempColor={selectedDevice.autoTempColor}
                 hubName={hubNameFor(selectedDevice)}
                 onChange={(state) => {
                   handleRgbChange(selectedDevice, state);

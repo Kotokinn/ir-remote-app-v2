@@ -72,7 +72,7 @@
     "items": {
       "new-brands": "Thương hiệu mới",
       "profile": "Hồ sơ",
-      "household": "Hộ gia đình",
+      "household": "Thành viên",
       "account": "Tài khoản",
       "sync-options": "Tuỳ chọn đồng bộ",
       "support": "Hỗ trợ",
@@ -483,6 +483,9 @@
       "chase": "Đuổi"
     },
     "effectLabel": "Hiệu ứng",
+    "autoTempColor": "Màu tự động theo nhiệt độ",
+    "autoTempColorHint": "Dùng nhiệt độ phòng hub đo được thay cho màu đã chọn, kết hợp được với mọi hiệu ứng.",
+    "autoTempNote": "Đang tự đổi màu theo nhiệt độ phòng — xanh dương khi mát, vàng hổ phách khi vừa, đỏ khi nóng. Nháy trắng 2 lần khi gửi lệnh IR, nháy tím 2 lần khi nhận IR, rồi tự quay lại màu nhiệt độ. Tắt tính năng này ở trên để quay lại đúng màu đã chọn.",
     "speed": "Tốc độ",
     "brightness": "Độ sáng",
     "color": "Màu sắc"
@@ -585,7 +588,7 @@
     "shareHint": "Chọn một phòng để chia sẻ toàn bộ (họ cũng có thể thêm thiết bị của riêng họ vào đó), hoặc chọn từng thiết bị (chỉ để điều khiển).",
     "inviteTitleOne": "Chia sẻ “{{name}}”",
     "inviteTitleMany_other": "Chia sẻ {{count}} mục",
-    "inviteHint": "Hãy quét mã bằng camera điện thoại của họ, hoặc nhờ họ nhập vào Hộ gia đình → Tham gia. Mã chỉ dùng được một lần và hết hạn vào {{when}}.",
+    "inviteHint": "Hãy quét mã bằng camera điện thoại của họ, hoặc nhờ họ nhập vào Thành viên → Tham gia. Mã chỉ dùng được một lần và hết hạn vào {{when}}.",
     "roomAccess": "cả phòng — điều khiển, tự động hoá, thêm thiết bị của riêng họ",
     "deviceAccess": "chỉ điều khiển",
     "qrAlt": "Mã QR lời mời",

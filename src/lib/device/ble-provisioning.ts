@@ -25,6 +25,7 @@ import {
   connect as webConnect,
   disconnect as webDisconnect,
   readString as webReadString,
+  rememberDeviceId as webRememberDeviceId,
   subscribeString as webSubscribeString,
   unsubscribeString as webUnsubscribeString,
   writeString as webWriteString,
@@ -128,6 +129,16 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
   // the "stopped" event fires, and connecting immediately after can still hit E_ABORT.
   await sleep(300);
   return Array.from(found.values());
+}
+
+/**
+ * Web only: ble-transport.ts reconnects later by the real deviceId alone, with no scan in between to
+ * relearn it — record the pairing-time browser address against it now, while both are known (right
+ * after readDeviceId()). No-op in the app: it always has a live scan result's address at hand there.
+ */
+export function rememberBleDeviceId(deviceId: string, browserAddress: string): void {
+  if (runsInApp()) return;
+  webRememberDeviceId(deviceId, browserAddress);
 }
 
 export async function connectToHub(

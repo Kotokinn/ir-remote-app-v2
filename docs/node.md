@@ -1,0 +1,2 @@
+- Các thiết bị chỉ có wifi và ble chỉ cho phép tự động provision qua ble
+- Các thiết bị có internet như có module SIM thì có thể dùng qr code để scan và connect

@@ -58,7 +58,9 @@ const TITLES: Record<Step["name"], TKey> = {
 
 /** The step that runs one way of adding a device. */
 function flowFor(method: ClaimMethod, product: PhysicalProductType): Step {
-  return method === "qr" ? { name: "qr", product } : { name: "provisioning", product };
+  return method === "qr"
+    ? { name: "qr", product }
+    : { name: "provisioning", product };
 }
 
 export function AddDeviceFlow({
@@ -93,7 +95,11 @@ export function AddDeviceFlow({
 
   function afterPaired(created: PhysicalDevice) {
     if (created.productType === "hub-ir") {
-      setStep({ name: "hub-function", hubId: created.id, hubName: created.name });
+      setStep({
+        name: "hub-function",
+        hubId: created.id,
+        hubName: created.name,
+      });
     } else {
       setStep({ name: "relay", physicalId: created.id });
     }
@@ -321,6 +327,7 @@ export function AddDeviceFlow({
             color: SHADE_COLORS[0],
             effect: "solid",
             effectSpeed: 3,
+            autoTempColor: false,
           })}
         />
       )}

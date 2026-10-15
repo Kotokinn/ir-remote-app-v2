@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { sendDeviceCommand } from "@/lib/device/device-commands";
 import { useHubsStore } from "@/lib/store/hubs-store";
 import { useOtaStore } from "@/lib/store/ota-store";
-import { sendDeviceCommand } from "@/lib/device/device-commands";
 
 /**
- * Live, ephemeral OTA prompts — not persisted server-side notifications (unlike everything else on
- * this page). smart-control announces firmwareAvailable/otaStarted/otaSuccess/otaFailed on its
- * `events` MQTT topic (see main.cpp's publishOtaEvent) and only while the app is actually watching
- * (mqtt-service's SSE stream); nothing is missed while the app is closed though, since the firmware
- * re-announces firmwareAvailable on every OTA check it's still pending (TB_OTA_CHECK_INTERVAL_MS).
- * The version sent back in confirmOtaUpdate is always exactly the newVersion this same event carried
- * — never hand-entered — so it can't drift from what the device actually offered.
+ * Live, ephemeral OTA banners — not persisted server-side notifications (unlike everything else on
+ * this page; "updated" / "update failed" also arrive there, from smart-remote-iot). Current firmware
+ * updates itself as soon as it finds a newer version and announces otaStarted / otaSuccess (after
+ * the reboot) / otaFailed on its `events` MQTT topic (main.cpp's publishOtaEvent); the banner only
+ * shows progress, and "Retry" (confirmOtaUpdate) makes it check and install right away. Older
+ * firmware still announces firmwareAvailable and waits for confirmOtaUpdate with the version this
+ * same event carried — never hand-entered — so it can't drift from what the device offered.
  */
 export function OtaBanners() {
   const { t } = useTranslation();
@@ -25,7 +25,9 @@ export function OtaBanners() {
 
   const rows = physicalDevices.flatMap((hub) => {
     const deviceId = hub.deviceId;
-    const event = deviceId ? (events as Partial<typeof events>)[deviceId] : undefined;
+    const event = deviceId
+      ? (events as Partial<typeof events>)[deviceId]
+      : undefined;
     return deviceId && event ? [{ hub, deviceId, event }] : [];
   });
 
@@ -64,7 +66,10 @@ export function OtaBanners() {
               {event.type === "firmwareAvailable" && (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    {t("ota.available", { newVersion: event.newVersion, currentVersion: event.currentVersion })}
+                    {t("ota.available", {
+                      newVersion: event.newVersion,
+                      currentVersion: event.currentVersion,
+                    })}
                   </p>
                   <button
                     type="button"
@@ -80,12 +85,16 @@ export function OtaBanners() {
               )}
 
               {event.type === "otaStarted" && (
-                <p className="text-xs text-muted-foreground">{t("ota.updating", { version: event.newVersion })}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("ota.updating", { version: event.newVersion })}
+                </p>
               )}
 
               {event.type === "otaSuccess" && (
                 <>
-                  <p className="text-xs text-muted-foreground">{t("ota.updated", { version: event.newVersion })}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("ota.updated", { version: event.newVersion })}
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
@@ -100,7 +109,9 @@ export function OtaBanners() {
 
               {event.type === "otaFailed" && (
                 <>
-                  <p className="text-xs text-destructive">{t("ota.failed", { version: event.newVersion })}</p>
+                  <p className="text-xs text-destructive">
+                    {t("ota.failed", { version: event.newVersion })}
+                  </p>
                   <button
                     type="button"
                     disabled={sending}
@@ -110,6 +121,15 @@ export function OtaBanners() {
                     className="mt-1 w-fit rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
                   >
                     {sending ? t("ota.retrying") : t("common.retry")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dismiss(deviceId);
+                    }}
+                    className="w-fit text-xs font-medium text-muted-foreground"
+                  >
+                    {t("ota.dismiss")}
                   </button>
                 </>
               )}

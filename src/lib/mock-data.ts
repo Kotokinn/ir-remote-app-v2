@@ -150,6 +150,8 @@ export interface Device {
   color?: string;
   effect?: RgbEffect;
   effectSpeed?: number;
+  /** docs/MQTT_API.md setRgbMode's `autoTempColor` — independent of `effect`, not a value of it. */
+  autoTempColor?: boolean;
 }
 
 export const SHADE_COLORS = [
@@ -212,6 +214,7 @@ export interface SceneAction {
       | "color"
       | "effect"
       | "effectSpeed"
+      | "autoTempColor"
     >
   >;
 }

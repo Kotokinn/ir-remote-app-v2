@@ -106,9 +106,10 @@ export function buildSetSleepModeCommand(
   };
 }
 
-// docs/MQTT_API.md setRgbMode: 0=OFF,1=STATIC,2=ROTATING,3=BREATHING,4=WAVE,5=RAINBOW,
-// 6=STROBE,7=SPARKLE,8=CONFETTI,9=POLICE,10=COLOR_WIPE,11=FIRE. The UI only offers 5
-// effects today — each maps to the closest real mode.
+// docs/MQTT_API.md setRgbMode: mode 0=OFF,1=STATIC,2=ROTATING,3=BREATHING,4=WAVE,5=RAINBOW,
+// 6=STROBE,7=SPARKLE,8=CONFETTI,9=POLICE,10=COLOR_WIPE,11=FIRE. The UI only offers 5 effects
+// today — each maps to the closest real mode. setRgbMode also takes an independent `autoTempColor`
+// flag (not a mode value) that works with any mode — see buildRgbCommands below.
 const RGB_EFFECT_TO_MODE: Record<RgbEffect, number> = {
   solid: 1,
   blink: 6,
@@ -134,10 +135,15 @@ export function buildRgbCommands(
     return [{ method: "setRgbMode", params: { mode: 0 } }];
   }
   return [
+    // Still sent even with autoTempColor on: it's the color the effect reverts to the moment
+    // autoTempColor is switched off, and the firmware keeps it either way.
     { method: "setRgbColor", params: { color: state.color } },
     {
       method: "setRgbMode",
-      params: { mode: RGB_EFFECT_TO_MODE[state.effect] },
+      params: {
+        mode: RGB_EFFECT_TO_MODE[state.effect],
+        autoTempColor: state.autoTempColor,
+      },
     },
     { method: "setRgbBrightness", params: { value: state.intensity } },
     {

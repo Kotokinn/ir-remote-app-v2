@@ -26,6 +26,7 @@ import {
   provisionWifi,
   queryIdentity,
   readDeviceId,
+  rememberBleDeviceId,
   type ScannedHub,
   scanForHubs,
   sendClaimDone,
@@ -129,6 +130,7 @@ export function BleProvisioning({
       .then(() => readDeviceId())
       .then(async (id) => {
         setDeviceId(id);
+        rememberBleDeviceId(id, device.address);
         const found = await queryIdentity();
         if (!found) {
           // Older firmware: Wi-Fi first, then the MQTT claim (startClaim) as before.

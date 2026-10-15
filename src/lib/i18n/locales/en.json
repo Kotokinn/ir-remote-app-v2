@@ -74,7 +74,7 @@
     "items": {
       "new-brands": "New brands",
       "profile": "Profile",
-      "household": "Household",
+      "household": "Members",
       "account": "Account",
       "sync-options": "Sync options",
       "support": "Support",
@@ -493,6 +493,9 @@
       "chase": "Chase"
     },
     "effectLabel": "Effect",
+    "autoTempColor": "Auto color by temperature",
+    "autoTempColorHint": "Uses the hub's sensed room temperature instead of your chosen color — works with any effect.",
+    "autoTempNote": "Color is currently following room temperature — blue when cool, amber when mild, red when warm. It flashes white sending an IR command and purple receiving one, then returns to the temperature color. Turn this off above to go back to your chosen color.",
     "speed": "Speed",
     "brightness": "Brightness",
     "color": "Color"
@@ -596,7 +599,7 @@
     "inviteTitleOne": "Share “{{name}}”",
     "inviteTitleMany_one": "Share {{count}} item",
     "inviteTitleMany_other": "Share {{count}} items",
-    "inviteHint": "Scan the code with their phone's camera, or have them type it in Household → Join. It works once and expires {{when}}.",
+    "inviteHint": "Scan the code with their phone's camera, or have them type it in Members → Join. It works once and expires {{when}}.",
     "roomAccess": "whole room — control it, automate it, add their own devices",
     "deviceAccess": "control only",
     "qrAlt": "Invite QR code",

@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, Lightbulb } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDevicesStore } from "@/lib/store/devices-store";
-import { mayConfigure } from "@/lib/sharing";
-import { useRoomsStore } from "@/lib/store/rooms-store";
-import { getCategory, SHADE_COLORS, type Device, type DeviceKind, type SceneAction } from "@/lib/mock-data";
-import { LightControlPanel, type LightState } from "@/components/devices/light-control-panel";
-import { AcControlPanel, type AcState } from "@/components/devices/ac-control-panel";
-import { RgbControlPanel, type RgbState } from "@/components/devices/rgb-control-panel";
+import {
+  AcControlPanel,
+  type AcState,
+} from "@/components/devices/ac-control-panel";
+import {
+  LightControlPanel,
+  type LightState,
+} from "@/components/devices/light-control-panel";
+import {
+  RgbControlPanel,
+  type RgbState,
+} from "@/components/devices/rgb-control-panel";
 import { Switch } from "@/components/ui/switch";
+import {
+  type Device,
+  type DeviceKind,
+  getCategory,
+  type SceneAction,
+  SHADE_COLORS,
+} from "@/lib/mock-data";
+import { mayConfigure } from "@/lib/sharing";
+import { useDevicesStore } from "@/lib/store/devices-store";
+import { useRoomsStore } from "@/lib/store/rooms-store";
 import { cn } from "@/lib/utils";
 
 const ELIGIBLE_KINDS: DeviceKind[] = ["toggle", "light", "ac", "rgb"];
@@ -41,6 +56,7 @@ function defaultPatch(device: Device): Patch {
         color: device.color ?? SHADE_COLORS[0],
         effect: device.effect ?? "solid",
         effectSpeed: device.effectSpeed ?? 3,
+        autoTempColor: device.autoTempColor ?? false,
       };
     default:
       return { isOn: true };
@@ -97,6 +113,7 @@ function DeviceEditor({
         color={patch.color}
         effect={patch.effect}
         effectSpeed={patch.effectSpeed}
+        autoTempColor={patch.autoTempColor}
         onChange={(state: RgbState) => {
           onChange(state);
         }}
@@ -105,7 +122,9 @@ function DeviceEditor({
   }
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{t("sceneEditor.turnOn")}</span>
+      <span className="text-sm text-muted-foreground">
+        {t("sceneEditor.turnOn")}
+      </span>
       <Switch
         checked={patch.isOn ?? true}
         onCheckedChange={(v) => {
@@ -126,7 +145,7 @@ export function SceneDeviceEditor({
   const { t } = useTranslation();
   // A device shared for control only can't be put in an automation (the server refuses it too).
   const devices = useDevicesStore((s) => s.devices).filter(
-    (d) => ELIGIBLE_KINDS.includes(d.kind) && mayConfigure(d)
+    (d) => ELIGIBLE_KINDS.includes(d.kind) && mayConfigure(d),
   );
   const rooms = useRoomsStore((s) => s.rooms);
   const [patches, setPatches] = useState<Map<string, Patch>>(() => {
@@ -139,7 +158,10 @@ export function SceneDeviceEditor({
   function commit(next: Map<string, Patch>) {
     setPatches(next);
     onActionsChange(
-      Array.from(next.entries()).map(([deviceId, patch]) => ({ deviceId, patch }))
+      Array.from(next.entries()).map(([deviceId, patch]) => ({
+        deviceId,
+        patch,
+      })),
     );
   }
 
@@ -194,9 +216,13 @@ export function SceneDeviceEditor({
               >
                 <div className="flex items-center gap-3 px-4 py-3">
                   {category && (
-                    <category.icon className={cn("size-5 shrink-0", category.color)} />
+                    <category.icon
+                      className={cn("size-5 shrink-0", category.color)}
+                    />
                   )}
-                  <span className="flex-1 truncate text-sm font-medium">{device.name}</span>
+                  <span className="flex-1 truncate text-sm font-medium">
+                    {device.name}
+                  </span>
                   {selected && (
                     <button
                       type="button"
@@ -204,10 +230,17 @@ export function SceneDeviceEditor({
                         setExpandedId(expanded ? null : device.id);
                       }}
                       className="text-muted-foreground"
-                      aria-label={expanded ? t("sceneEditor.collapse") : t("sceneEditor.expand")}
+                      aria-label={
+                        expanded
+                          ? t("sceneEditor.collapse")
+                          : t("sceneEditor.expand")
+                      }
                     >
                       <ChevronDown
-                        className={cn("size-4 transition-transform", expanded && "rotate-180")}
+                        className={cn(
+                          "size-4 transition-transform",
+                          expanded && "rotate-180",
+                        )}
                       />
                     </button>
                   )}

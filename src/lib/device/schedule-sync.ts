@@ -11,10 +11,17 @@
 //    light/toggle devices have no firmware method yet, so they are skipped.
 //  - The firmware identifies a schedule by id (`s<appId>`), so re-sending overwrites and
 //    deleteSchedule removes exactly that one.
-import { t } from "@/lib/i18n";
+
 import { buildRgbCommands, buildSendAcCommand } from "@/lib/device/commands";
 import { sendDeviceCommand } from "@/lib/device/device-commands";
-import { SHADE_COLORS, type Device, type Scene, type SceneAction, type Schedule } from "@/lib/mock-data";
+import { t } from "@/lib/i18n";
+import {
+  type Device,
+  type Scene,
+  type SceneAction,
+  type Schedule,
+  SHADE_COLORS,
+} from "@/lib/mock-data";
 import { useDevicesStore } from "@/lib/store/devices-store";
 import { getPhysicalDevice, useHubsStore } from "@/lib/store/hubs-store";
 
@@ -55,7 +62,11 @@ export function toFirmwareDay(appDay: number): number {
   return (appDay + 1) % 7;
 }
 
-function actionsFor(device: Device, patch: SceneAction["patch"], revert: boolean): FirmwareAction[] {
+function actionsFor(
+  device: Device,
+  patch: SceneAction["patch"],
+  revert: boolean,
+): FirmwareAction[] {
   const state = { ...device, ...patch };
   if (revert && !state.isOn) return [];
   const isOn = revert ? false : state.isOn;
@@ -78,6 +89,7 @@ function actionsFor(device: Device, patch: SceneAction["patch"], revert: boolean
       color: state.color ?? SHADE_COLORS[0],
       effect: state.effect ?? "solid",
       effectSpeed: state.effectSpeed ?? 50,
+      autoTempColor: state.autoTempColor ?? false,
     });
   }
 
@@ -106,11 +118,17 @@ export function hubDeviceIdsForScene(scene: Scene | undefined): Set<string> {
   return ids;
 }
 
-function buildHubSchedules(schedule: Schedule, scene: Scene): Map<string, FirmwareSchedule> {
+function buildHubSchedules(
+  schedule: Schedule,
+  scene: Scene,
+): Map<string, FirmwareSchedule> {
   const { devices } = useDevicesStore.getState();
   const { physicalDevices } = useHubsStore.getState();
   const withEnd = schedule.hasEnd && Boolean(schedule.endAt);
-  const perHub = new Map<string, { start: FirmwareAction[]; end: FirmwareAction[] }>();
+  const perHub = new Map<
+    string,
+    { start: FirmwareAction[]; end: FirmwareAction[] }
+  >();
 
   for (const action of scene.actions) {
     const device = devices.find((d) => d.id === action.deviceId);
@@ -143,7 +161,9 @@ function buildHubSchedules(schedule: Schedule, scene: Scene): Map<string, Firmwa
 }
 
 export function hubLabel(hubDeviceId: string): string {
-  const hub = useHubsStore.getState().physicalDevices.find((d) => d.deviceId === hubDeviceId);
+  const hub = useHubsStore
+    .getState()
+    .physicalDevices.find((d) => d.deviceId === hubDeviceId);
   return hub?.name ?? hubDeviceId;
 }
 
@@ -178,10 +198,16 @@ export async function runSceneOnHubs(scene: Scene): Promise<Set<string>> {
 }
 
 async function runOnHubs(
-  tasks: Array<{ hubDeviceId: string; method: string; params: Record<string, unknown> }>
+  tasks: Array<{
+    hubDeviceId: string;
+    method: string;
+    params: Record<string, unknown>;
+  }>,
 ): Promise<string[]> {
   const results = await Promise.allSettled(
-    tasks.map((task) => sendDeviceCommand(task.hubDeviceId, task.method, task.params))
+    tasks.map((task) =>
+      sendDeviceCommand(task.hubDeviceId, task.method, task.params),
+    ),
   );
   const failed: string[] = [];
   results.forEach((result, index) => {
@@ -202,12 +228,18 @@ async function runOnHubs(
 export async function syncScheduleToHubs(
   schedule: Schedule,
   scene: Scene | undefined,
-  extraStaleHubs: Iterable<string> = []
+  extraStaleHubs: Iterable<string> = [],
 ): Promise<string[]> {
-  const active = schedule.enabled && schedule.days.length > 0 && scene !== undefined;
-  const wanted = active ? buildHubSchedules(schedule, scene) : new Map<string, FirmwareSchedule>();
+  const active =
+    schedule.enabled && schedule.days.length > 0 && scene !== undefined;
+  const wanted = active
+    ? buildHubSchedules(schedule, scene)
+    : new Map<string, FirmwareSchedule>();
 
-  const stale = new Set<string>([...hubDeviceIdsForScene(scene), ...extraStaleHubs]);
+  const stale = new Set<string>([
+    ...hubDeviceIdsForScene(scene),
+    ...extraStaleHubs,
+  ]);
   for (const hubDeviceId of wanted.keys()) stale.delete(hubDeviceId);
 
   return runOnHubs([
@@ -225,13 +257,16 @@ export async function syncScheduleToHubs(
 }
 
 /** Deletes the schedule from every hub it may live on. */
-export function removeScheduleFromHubs(schedule: Schedule, scene: Scene | undefined): Promise<string[]> {
+export function removeScheduleFromHubs(
+  schedule: Schedule,
+  scene: Scene | undefined,
+): Promise<string[]> {
   return runOnHubs(
     Array.from(hubDeviceIdsForScene(scene), (hubDeviceId) => ({
       hubDeviceId,
       method: "deleteSchedule",
       params: { id: firmwareId(schedule) },
-    }))
+    })),
   );
 }
 
