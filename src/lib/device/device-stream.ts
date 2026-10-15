@@ -7,11 +7,7 @@ import { startSse } from "@/lib/sse";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDeviceStateStore } from "@/lib/store/device-state-store";
 import { useHubsStore } from "@/lib/store/hubs-store";
-import {
-  type OtaEvent,
-  type OtaEventType,
-  useOtaStore,
-} from "@/lib/store/ota-store";
+import { type OtaEventType, useOtaStore } from "@/lib/store/ota-store";
 
 const OTA_EVENT_TYPES: readonly OtaEventType[] = [
   "firmwareAvailable",
@@ -54,7 +50,7 @@ function syncAutoUpdateFromAttributes(
     typeof attributes.firmwareVersion === "string"
       ? attributes.firmwareVersion
       : "";
-  const existing = ota.events[deviceId] as OtaEvent | undefined;
+  const existing = ota.events[deviceId];
 
   if (updating && updating !== current) {
     if (existing?.type === "otaStarted" && existing.newVersion === updating)
@@ -101,7 +97,7 @@ function syncOfferFromAttributes(
     typeof attributes.firmwareVersion === "string"
       ? attributes.firmwareVersion
       : "";
-  const existing = ota.events[deviceId] as OtaEvent | undefined;
+  const existing = ota.events[deviceId];
 
   if (!pending || pending === current) {
     if (existing?.type === "firmwareAvailable") ota.dismiss(deviceId);
