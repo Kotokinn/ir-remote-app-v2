@@ -136,7 +136,10 @@ export async function scanForHubs(timeoutMs: number): Promise<ScannedHub[]> {
  * relearn it — record the pairing-time browser address against it now, while both are known (right
  * after readDeviceId()). No-op in the app: it always has a live scan result's address at hand there.
  */
-export function rememberBleDeviceId(deviceId: string, browserAddress: string): void {
+export function rememberBleDeviceId(
+  deviceId: string,
+  browserAddress: string,
+): void {
   if (runsInApp()) return;
   webRememberDeviceId(deviceId, browserAddress);
 }
@@ -241,8 +244,11 @@ export async function readDeviceId(): Promise<string> {
     if (fromTopic) return fromTopic;
     // Frames without the id in the topic but in the body (phase 2 "identity|{deviceId,...}").
     try {
-      const body = JSON.parse(frame.slice(separatorIndex + 1)) as { deviceId?: unknown };
-      if (typeof body.deviceId === "string" && body.deviceId) return body.deviceId;
+      const body = JSON.parse(frame.slice(separatorIndex + 1)) as {
+        deviceId?: unknown;
+      };
+      if (typeof body.deviceId === "string" && body.deviceId)
+        return body.deviceId;
     } catch {
       // not JSON: fall through
     }
@@ -294,10 +300,7 @@ async function exchange<T>(
     );
   }
 
-  const result = await Promise.race([
-    reply,
-    sleep(timeoutMs).then(() => null),
-  ]);
+  const result = await Promise.race([reply, sleep(timeoutMs).then(() => null)]);
   await (runsInApp()
     ? unsubscribe(HUB_CHARACTERISTIC_UUID)
     : webUnsubscribeString()

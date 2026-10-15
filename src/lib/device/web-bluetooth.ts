@@ -46,7 +46,10 @@ function loadDeviceIdMap(): Record<string, string> {
 }
 
 /** Call once the real deviceId is known (right after readDeviceId() during pairing). */
-export function rememberDeviceId(realDeviceId: string, browserAddress: string): void {
+export function rememberDeviceId(
+  realDeviceId: string,
+  browserAddress: string,
+): void {
   try {
     const map = loadDeviceIdMap();
     map[realDeviceId] = browserAddress;
