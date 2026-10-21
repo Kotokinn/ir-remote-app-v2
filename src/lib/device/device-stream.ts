@@ -1,12 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { API_BASE_URL } from "@/lib/api/config";
-import { startClaim } from "@/lib/api/mqtt";
 import { runsInApp } from "@/lib/platform";
 import { startSse } from "@/lib/sse";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDeviceStateStore } from "@/lib/store/device-state-store";
-import { useHubsStore } from "@/lib/store/hubs-store";
 import { type OtaEventType, useOtaStore } from "@/lib/store/ota-store";
 
 const OTA_EVENT_TYPES: readonly OtaEventType[] = [
@@ -123,28 +121,28 @@ const activeUnlisten = new Map<string, UnlistenFn>();
 // The browser build reads the stream itself (see lib/sse.ts) instead of through the Rust side.
 const webStops = new Map<string, () => void>();
 
-const RECLAIM_COOLDOWN_MS = 60_000;
-const lastReclaimAt = new Map<string, number>();
+const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+const retryAttempts = new Map<string, number>();
+const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /**
- * The server keeps device ownership in its own database. If that record is gone (server reset /
- * redeploy) the stream answers 404 "Device not claimed" although the hub is still ours and still
- * answers the claim command — so claim it again once and reconnect instead of leaving the user
- * with a hub that looks permanently unreachable.
+ * The stream answers 404 while the server can't let this account reach the device yet — mostly a device
+ * that hasn't been online since mqtt-service started (it learns each device's profile from the device's
+ * own messages), or one just claimed that is still joining Wi-Fi. Try again later, backing off, instead of
+ * giving up on the hub; a stream that opens resets the back-off.
  */
-function reclaimAndReconnect(deviceId: string): void {
-  const now = Date.now();
-  if (now - (lastReclaimAt.get(deviceId) ?? 0) < RECLAIM_COOLDOWN_MS) return;
-  lastReclaimAt.set(deviceId, now);
-
-  const hub = useHubsStore
-    .getState()
-    .physicalDevices.find((device) => device.deviceId === deviceId);
-  startClaim(deviceId, hub?.name ?? deviceId)
-    .then(() => startDeviceStream(deviceId))
-    .catch((error: unknown) => {
-      console.warn(`[device-stream] re-claim of ${deviceId} failed`, error);
-    });
+function retryStreamLater(deviceId: string): void {
+  if (retryTimers.has(deviceId)) return;
+  const attempt = retryAttempts.get(deviceId) ?? 0;
+  const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+  retryAttempts.set(deviceId, attempt + 1);
+  retryTimers.set(
+    deviceId,
+    setTimeout(() => {
+      retryTimers.delete(deviceId);
+      startDeviceStream(deviceId).catch(() => undefined);
+    }, delay),
+  );
 }
 
 function applyEvent(deviceId: string, payload: DeviceEventPayload) {
@@ -155,10 +153,11 @@ function applyEvent(deviceId: string, payload: DeviceEventPayload) {
     console.error(`[device-stream] ${deviceId}:`, payload.data);
     store.markStreamError(deviceId);
     // reqwest-eventsource reports a rejected stream as "Invalid status code: 404 Not Found".
-    if (payload.data.includes("404")) reclaimAndReconnect(deviceId);
+    if (payload.data.includes("404")) retryStreamLater(deviceId);
     return;
   }
   if (payload.event === "open" || payload.event === "ping") {
+    retryAttempts.delete(deviceId);
     store.touchStream(deviceId);
     return;
   }
@@ -258,6 +257,8 @@ export async function startDeviceStream(deviceId: string): Promise<void> {
 }
 
 export async function stopDeviceStream(deviceId: string): Promise<void> {
+  clearTimeout(retryTimers.get(deviceId));
+  retryTimers.delete(deviceId);
   webStops.get(deviceId)?.();
   webStops.delete(deviceId);
   if (!runsInApp()) return;

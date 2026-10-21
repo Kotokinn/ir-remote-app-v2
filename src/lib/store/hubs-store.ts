@@ -62,7 +62,6 @@ interface HubsState {
   /** The server is the source of truth; on failure the cached list stays as it was. */
   fetchHubs: () => Promise<void>;
   /** Needs the server-assigned id, so — unlike update/remove — it can't be optimistic; rejects on failure. */
-  addPhysicalDevice: (device: Omit<PhysicalDevice, "id" | "online">) => Promise<PhysicalDevice>;
   /** A hub the server already created (a claim made it): just add it to the list. */
   adoptHub: (hub: HubResponse) => PhysicalDevice;
   /** Applies at once; the server copy follows from the sync queue (retried until it gets there). */
@@ -104,18 +103,6 @@ export const useHubsStore = create<HubsState>()(
         } catch (error) {
           console.error("[hubs] refresh failed, keeping the cached list", error);
         }
-      },
-      addPhysicalDevice: async (device) => {
-        const created = fromResponse(
-          await hubsApi.create({
-            name: device.name,
-            roomId: device.roomId,
-            productType: device.productType,
-            deviceId: device.deviceId,
-          })
-        );
-        set((state) => ({ physicalDevices: [...state.physicalDevices, created] }));
-        return created;
       },
       adoptHub: (hub) => {
         const adopted = fromResponse(hub);

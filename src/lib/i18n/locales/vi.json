@@ -260,7 +260,6 @@
     "connectFailed": "Không kết nối được qua Bluetooth",
     "provisionFailed": "Thiết lập thất bại",
     "wifiRejected": "Thiết bị không kết nối được với mạng Wi-Fi đó.",
-    "offlineAfterRestart": "Thiết bị không hoạt động trở lại sau khi khởi động lại. Hãy kiểm tra mạng Wi-Fi này có truy cập được máy chủ không, rồi thử lại.",
     "saveFailed": "Không lưu được thiết bị. Hãy thử lại.",
     "scanning": "Đang quét các thiết bị ở gần…",
     "scanningHint": "Hãy chắc chắn {{product}} đã được cấp nguồn và đang ở chế độ ghép nối.",
@@ -276,9 +275,7 @@
     "hidePassword": "Ẩn mật khẩu",
     "connect": "Kết nối",
     "checkingWifi": "Đang kiểm tra Wi-Fi của bạn…",
-    "claiming": "Thiết bị đang kết nối — đang đăng ký thiết bị…",
     "checkingWifiHint": "Thiết bị đang thử kết nối vào mạng Wi-Fi của bạn. Việc này có thể mất tới 20 giây.",
-    "claimingHint": "Việc này có thể mất tới 20 giây trong khi thiết bị kết nối Wi-Fi và MQTT.",
     "failed": "Ghép nối thất bại",
     "tryAgain": "Thử lại",
     "connectedName": "Đã kết nối! Hãy đặt tên cho nó",
@@ -306,7 +303,8 @@
     "qrCode": "Mã",
     "qrSubmit": "Thêm thiết bị",
     "qrDoneAuto": "Thiết bị hoạt động ngay khi có điện và có mạng.",
-    "signFailed": "Thiết bị không ký được yêu cầu. Khởi động lại thiết bị rồi thử lại."
+    "signFailed": "Thiết bị không ký được yêu cầu. Khởi động lại thiết bị rồi thử lại.",
+    "firmwareTooOld": "Thiết bị đang chạy firmware cũ, không thêm được nữa. Hãy cập nhật firmware rồi thử lại."
   },
   "errors": {
     "alarmNotPaired": "Hub này chưa được ghép nối qua mạng nên báo thức chưa được gửi tới nó.",
@@ -670,7 +668,8 @@
     "DEVICE_KEY_MISMATCH": "Không xác minh được thiết bị. Liên hệ hỗ trợ.",
     "DEVICE_SIGNATURE_INVALID": "Thiết bị không chứng minh được là hàng thật. Thử lại.",
     "DEVICE_KEY_INVALID": "Thiết bị gửi khoá không hợp lệ. Cập nhật firmware rồi thử lại.",
-    "HUB_REGISTRY_UNAVAILABLE": "Máy chủ chưa kiểm tra được thiết bị. Thử lại sau ít phút."
+    "HUB_REGISTRY_UNAVAILABLE": "Máy chủ chưa kiểm tra được thiết bị. Thử lại sau ít phút.",
+    "DEVICE_NOT_FROM_FACTORY": "Thiết bị này không thuộc lô sản xuất đã đăng ký nên không thêm được. Hãy liên hệ hỗ trợ."
   },
   "authCallback": {
     "signingIn": "Đang đăng nhập cho bạn…",

@@ -7,7 +7,7 @@ Nguồn contract chính xác là code (`buildTopics()`, `processCommand()`, `pro
 
 Thiết bị hỗ trợ **hai đường truyền song song, cùng topic và cùng payload**:
 
-- **MQTT** — kết nối tới TBMQ broker (`TBMQ_SERVER:TBMQ_PORT`), username/password tĩnh (`MQTT_USERNAME`/`MQTT_PASSWORD`), client ID = `deviceId`.
+- **MQTT** — kết nối tới TBMQ broker bằng **credential riêng của thiết bị** (xin qua devices-registry sau khi được claim bằng BLE/QR, xem `services/docs/FIRMWARE_INTEGRATION.md` mục 6), client ID = `deviceId`. Không còn username/password dùng chung.
 - **BLE** — GATT server (NimBLE), dùng khi chưa có WiFi hoặc muốn giao tiếp cục bộ không qua broker. Chi tiết đầy đủ ở mục [BLE chi tiết](#ble-chi-tiết).
 
 Mọi payload chỉ nhận trên MQTT sẽ tự động cũng nhận được qua BLE nếu app kết nối BLE, và ngược lại — cùng một hàm xử lý (`dispatchTopicPayload()`).
@@ -39,7 +39,6 @@ v1/tenants/<tenant>/devices/<profile>/<deviceId>/<phần riêng>
 | `.../commands/request/<requestId>` | server → device | không | Server gửi lệnh, `<requestId>` tự đặt để khớp response |
 | `.../commands/response/<requestId>` | device → server | không | Phản hồi lệnh, topic khớp đúng `requestId` vừa gửi |
 | `.../schedule/set` | server → device | không | Thêm lịch hẹn giờ (xem mục Schedule) |
-| `devices/<profile>/<deviceId>/claim` | device → server | không | Claim thiết bị, gửi tự động lúc connect (nếu bật) |
 | `init` (chỉ qua BLE) | server → device | — | Cấu hình WiFi/timezone lần đầu, chưa cần kết nối WiFi |
 
 Subscribe từ phía thiết bị (server publish vào các topic này để điều khiển): `commands/request/+`, `schedule/set`.
@@ -127,14 +126,6 @@ Thiết bị tự cập nhật (mục 9); lệnh này chỉ yêu cầu **kiểm 
 ```
 
 Response `success:true` `"Checking for firmware update"`; `success:false` với `"Firmware update already in progress"` hoặc `"Firmware update is disabled"`. Không có bản mới hơn thì không có gì xảy ra.
-
-### claim
-
-Gửi lại claim request (secretKey = deviceId) lên topic claim.
-
-```json
-{ "method": "claim" }
-```
 
 ### sendAc
 
@@ -396,16 +387,9 @@ Ví dụ **báo thức 6:30 các ngày trong tuần**, kêu 1 phút với âm l�
 
 Yêu cầu RTC đã sync giờ thật (qua NTP) — nếu RTC chưa sẵn sàng, lịch bị bỏ qua (log Serial `[SCHEDULE] RTC chua san sang`).
 
-## 7. Claim — `devices/<profile>/<deviceId>/claim`
+## 7. Claim
 
-Thiết bị tự publish khi connect MQTT (nếu `AUTO_CLAIM_ON_CONNECT = true`) hoặc khi nhận command `claim`.
-
-```json
-{
-  "secretKey": "A1B2C3D4E5F6",
-  "durationMs": 86400000
-}
-```
+Claim qua MQTT (topic `devices/<profile>/<deviceId>/claim`, lệnh `claim`) **đã bỏ**. Thiết bị được claim bằng BLE (ký nonce trong chế độ claim) hoặc tem QR qua dịch vụ sản phẩm — xem `services/docs/FIRMWARE_INTEGRATION.md` mục 5.
 
 ## 8. Init (chỉ qua BLE) — topic `init`
 

@@ -268,7 +268,6 @@
     "connectFailed": "Failed to connect over Bluetooth",
     "provisionFailed": "Provisioning failed",
     "wifiRejected": "The device couldn't connect to that Wi-Fi network.",
-    "offlineAfterRestart": "The device didn't come online after restarting. Check that this Wi-Fi network can reach the server, then try again.",
     "saveFailed": "Couldn't save the device. Try again.",
     "scanning": "Scanning for nearby devices…",
     "scanningHint": "Make sure your {{product}} is powered on and in pairing mode.",
@@ -284,9 +283,7 @@
     "hidePassword": "Hide password",
     "connect": "Connect",
     "checkingWifi": "Checking your Wi-Fi…",
-    "claiming": "Device is connecting — claiming it…",
     "checkingWifiHint": "The device is trying to join your Wi-Fi network. This can take up to 20 seconds.",
-    "claimingHint": "This can take up to 20 seconds while the device joins Wi-Fi and MQTT.",
     "failed": "Pairing failed",
     "tryAgain": "Try again",
     "connectedName": "Connected! Give it a name",
@@ -314,7 +311,8 @@
     "qrCode": "Code",
     "qrSubmit": "Add device",
     "qrDoneAuto": "It works as soon as it is powered and online.",
-    "signFailed": "The device couldn't sign the request. Restart it, then try again."
+    "signFailed": "The device couldn't sign the request. Restart it, then try again.",
+    "firmwareTooOld": "This device runs old firmware that can no longer be added. Update its firmware, then try again."
   },
   "errors": {
     "alarmNotPaired": "This hub isn't paired over the network yet, so the alarm wasn't sent to it.",
@@ -681,7 +679,8 @@
     "DEVICE_KEY_MISMATCH": "This device couldn't be verified. Contact support.",
     "DEVICE_SIGNATURE_INVALID": "The device couldn't prove it is genuine. Try again.",
     "DEVICE_KEY_INVALID": "The device sent an invalid key. Update its firmware and try again.",
-    "HUB_REGISTRY_UNAVAILABLE": "The server can't check the device right now. Try again in a moment."
+    "HUB_REGISTRY_UNAVAILABLE": "The server can't check the device right now. Try again in a moment.",
+    "DEVICE_NOT_FROM_FACTORY": "This device isn't from a registered production batch, so it can't be added. Contact support."
   },
   "authCallback": {
     "signingIn": "Signing you in…",

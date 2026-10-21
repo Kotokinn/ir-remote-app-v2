@@ -169,12 +169,6 @@ export function toWirePatch(patch: object): Record<string, unknown> {
 
 export const hubsApi = {
   list: () => apiGet<HubResponse[]>("/api/smart/hubs"),
-  create: (data: {
-    name: string;
-    roomId?: string;
-    productType: string;
-    deviceId?: string;
-  }) => apiPost<HubResponse>("/api/smart/hubs", data),
   /** Only the keys present are changed; a null value clears that field. */
   patch: (id: number, patch: Record<string, unknown>) =>
     apiPatch<HubResponse>(`/api/smart/hubs/${id}`, patch),

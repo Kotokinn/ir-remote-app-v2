@@ -15,7 +15,6 @@ import {
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/lib/api/auth";
-import { startClaim } from "@/lib/api/mqtt";
 import { claimsApi } from "@/lib/api/smart";
 import {
   ClaimModeRequiredError,
@@ -49,7 +48,6 @@ type Step =
   | "verifying"
   | "wifi"
   | "provisioning"
-  | "claiming"
   | "name"
   | "error";
 
@@ -71,12 +69,9 @@ export function BleProvisioning({
 }) {
   const { t, i18n } = useTranslation();
   const inApp = useRunsInApp();
-  const addPhysicalDevice = useHubsStore((s) => s.addPhysicalDevice);
   const adoptHub = useHubsStore((s) => s.adoptHub);
   const updatePhysicalDevice = useHubsStore((s) => s.updatePhysicalDevice);
-  // Set when the device runs the phase 2 firmware (answers `identity`): it is claimed with its own
-  // signature instead of the old MQTT claim, and the server creates the hub as part of the claim.
-  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  // The device is claimed with its own signature; the server creates the hub as part of the claim.
   const [claimedHub, setClaimedHub] = useState<PhysicalDevice | null>(null);
   const [step, setStep] = useState<Step>("scanning");
   const [found, setFound] = useState<ScannedHub[]>([]);
@@ -92,8 +87,6 @@ export function BleProvisioning({
   const [name, setName] = useState(defaultName);
   const [errorMessage, setErrorMessage] = useState("");
   const [wifiError, setWifiError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
 
   const Icon = product === "hub-ir" ? Radio : Zap;
 
@@ -133,11 +126,11 @@ export function BleProvisioning({
         rememberBleDeviceId(id, device.address);
         const found = await queryIdentity();
         if (!found) {
-          // Older firmware: Wi-Fi first, then the MQTT claim (startClaim) as before.
-          setStep("wifi");
+          // Firmware without a key of its own (no `identity` frame) can't be claimed any more.
+          setErrorMessage(t("pairing.firmwareTooOld"));
+          setStep("error");
           return;
         }
-        setIdentity(found);
         if (!found.claimMode) {
           setStep("hold-button");
           return;
@@ -243,7 +236,6 @@ export function BleProvisioning({
       setStep("error");
       return;
     }
-    setIdentity(found);
     if (!found.claimMode) {
       setStep("hold-button");
       return;
@@ -272,24 +264,11 @@ export function BleProvisioning({
         return;
       }
 
-      if (identity) {
-        // Phase 2 firmware: already claimed over BLE; once on Wi-Fi it fetches its own MQTT
-        // credential by itself (docs/FIRMWARE_INTEGRATION.md, section 6).
-        setStep("name");
-        return;
-      }
-
-      // Accepted (or no reply — the claim below is then the real check). The device reboots onto
-      // the new network; deviceId was already learned via GATT read right after connecting.
-      setStep("claiming");
-      await startClaim(deviceId, name.trim() || defaultName);
+      // Already claimed over BLE; once on Wi-Fi the device fetches its own MQTT credential by
+      // itself (docs/FIRMWARE_INTEGRATION.md, section 6).
       setStep("name");
     } catch (error) {
-      if (error instanceof ApiError && error.status === 408) {
-        setErrorMessage(t("pairing.offlineAfterRestart"));
-      } else {
-        setErrorMessage(describeBleError(error, t("pairing.provisionFailed")));
-      }
+      setErrorMessage(describeBleError(error, t("pairing.provisionFailed")));
       setStep("error");
     } finally {
       if (!keepConnected) {
@@ -299,32 +278,13 @@ export function BleProvisioning({
   }
 
   async function finish() {
-    if (saving) return;
-    if (claimedHub) {
-      // The claim already created the hub; only a new name is left to save.
-      const finalName = name.trim() || claimedHub.name;
-      if (finalName !== claimedHub.name) {
-        await updatePhysicalDevice(claimedHub.id, { name: finalName });
-      }
-      onComplete({ ...claimedHub, name: finalName });
-      return;
+    if (!claimedHub) return;
+    // The claim already created the hub; only a new name is left to save.
+    const finalName = name.trim() || claimedHub.name;
+    if (finalName !== claimedHub.name) {
+      await updatePhysicalDevice(claimedHub.id, { name: finalName });
     }
-    if (!deviceId) return;
-    setSaving(true);
-    setSaveError("");
-    try {
-      const created = await addPhysicalDevice({
-        name: name.trim() || defaultName,
-        roomId,
-        productType: product,
-        deviceId,
-      });
-      onComplete(created);
-    } catch (error) {
-      setSaveError(describeApiError(error, t("pairing.saveFailed")));
-    } finally {
-      setSaving(false);
-    }
+    onComplete({ ...claimedHub, name: finalName });
   }
 
   if (step === "scanning") {
@@ -511,19 +471,13 @@ export function BleProvisioning({
     );
   }
 
-  if (step === "provisioning" || step === "claiming") {
+  if (step === "provisioning") {
     return (
       <div className="flex flex-col items-center gap-4 pt-10 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
-        <p className="text-sm font-medium">
-          {step === "provisioning"
-            ? t("pairing.checkingWifi")
-            : t("pairing.claiming")}
-        </p>
+        <p className="text-sm font-medium">{t("pairing.checkingWifi")}</p>
         <p className="text-xs text-muted-foreground">
-          {step === "provisioning"
-            ? t("pairing.checkingWifiHint")
-            : t("pairing.claimingHint")}
+          {t("pairing.checkingWifiHint")}
         </p>
       </div>
     );
@@ -567,18 +521,14 @@ export function BleProvisioning({
         }}
         className="h-11 rounded-xl border border-border px-3.5 text-sm outline-none focus:border-primary"
       />
-      {saveError && (
-        <p className="text-center text-xs text-destructive">{saveError}</p>
-      )}
       <button
         type="button"
         onClick={() => {
           void finish();
         }}
-        disabled={saving}
         className="mt-2 h-12 rounded-xl bg-brand-gradient text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 disabled:opacity-60"
       >
-        {saving ? t("addDevice.saving") : t("common.continue")}
+        {t("common.continue")}
       </button>
     </div>
   );

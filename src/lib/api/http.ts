@@ -80,7 +80,7 @@ export function apiGet<T>(path: string): Promise<T> {
 }
 
 // timeoutMs: override the default 20s for one-off calls whose server-side work can legitimately take
-// longer (e.g. mqtt-service's claim/start blocks on the device, see lib/api/mqtt.ts startClaim()) — the
+// longer (e.g. mqtt-service's ping waits for the device) — the
 // default is right for everything else and most callers never need to touch this.
 export function apiPost<T>(
   path: string,

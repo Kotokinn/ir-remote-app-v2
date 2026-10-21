@@ -1,31 +1,7 @@
 import { apiPost } from "@/lib/api/http";
 
-export interface DeviceResponse {
-  deviceId: string;
-  name: string;
-  claimedAt: string;
-}
-
 export interface CommandAcceptedResponse {
   requestId: string;
-}
-
-// mqtt-service holds this request open for up to ~60s waiting for the device to actually come online
-// (WiFi test + reboot + reconnect + MQTT connect + claim) — longer than apiPost's default 20s timeout,
-// which was aborting the request client-side before the server ever got to reply ("Request canceled"
-// instead of the proper 408 that offlineAfterRestart already handles). Give it real margin over that.
-const CLAIM_TIMEOUT_MS = 65_000;
-
-/** Publishes the "claim" command and blocks (mqtt-service-side timeout, ~60s) until the device claims itself. */
-export function startClaim(
-  deviceId: string,
-  name: string,
-): Promise<DeviceResponse> {
-  return apiPost<DeviceResponse>(
-    "/api/mqtt/claim/start",
-    { deviceId, name },
-    CLAIM_TIMEOUT_MS,
-  );
 }
 
 export interface PingResponse {
